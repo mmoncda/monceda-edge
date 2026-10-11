@@ -29,3 +29,6 @@ Cargo.toml.v*
 
 # Local integration fixture
 /test-app-4000/
+
+# Local staging configuration
+/monceda-edge.staging.toml
