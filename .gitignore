@@ -13,3 +13,19 @@ Cargo.toml.v0.*-working
 
 public/*.backup
 public/*-backup
+
+# Development checkpoints / backups
+*.backup
+*.working
+*.pre-*
+*.before-*
+*.v[0-9]*-working
+src/main.rs.v*
+monceda-edge.toml.v*
+Cargo.toml.v*
+
+# Local TLS / ACME state
+/certs/
+
+# Local integration fixture
+/test-app-4000/
