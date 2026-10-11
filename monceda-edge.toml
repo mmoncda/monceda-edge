@@ -1,0 +1,49 @@
+[server]
+host = "127.0.0.1"
+port = 8787
+static_dir = "public"
+
+[proxy]
+enabled = true
+upstream = "http://127.0.0.1:3000"
+health_path = "/"
+
+[cache]
+enabled = true
+ttl_seconds = 30
+
+[http]
+enabled = true
+port = 8080
+redirect_to_https = true
+
+[public_node]
+enabled = false
+primary_domain = ""
+expected_ipv4 = ""
+
+[deployment]
+mode = "development"
+require_public_ports = false
+require_public_domains = false
+
+[acme]
+enabled = true
+environment = "staging"
+email = ""
+cache_dir = "certs/acme"
+challenge = "http-01"
+
+[tls]
+enabled = true
+port = 8443
+cert = "certs/localhost-cert.pem"
+key = "certs/localhost-key.pem"
+
+[[routes]]
+host = "dashboard.local"
+upstream = "http://127.0.0.1:3000"
+
+[[routes]]
+host = "app.local"
+upstream = "http://127.0.0.1:4000"

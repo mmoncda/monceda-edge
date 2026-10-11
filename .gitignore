@@ -1,0 +1,15 @@
+/target/
+/dist/
+
+.DS_Store
+
+*.log
+
+certs/acme/
+certs/acme-staging/
+
+src/main.rs.v0.*-working
+Cargo.toml.v0.*-working
+
+public/*.backup
+public/*-backup

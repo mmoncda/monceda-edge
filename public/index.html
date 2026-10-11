@@ -1,0 +1,2071 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+
+<title>Monceda Edge</title>
+
+<style>
+:root{
+  --bg:#080a0d;
+  --surface:#0d1014;
+  --surface-2:#101419;
+  --surface-3:#13181e;
+
+  --line:#20262d;
+  --line-soft:#181d22;
+
+  --text:#f2f4f7;
+  --text-2:#bac2cc;
+  --muted:#737e8a;
+
+  --accent:#57c8ff;
+  --accent-soft:rgba(87,200,255,.09);
+
+  --green:#63d69a;
+  --green-soft:rgba(99,214,154,.09);
+
+  --amber:#e4b75e;
+  --amber-soft:rgba(228,183,94,.09);
+
+  --red:#ea737b;
+  --red-soft:rgba(234,115,123,.09);
+
+  --radius:9px;
+
+  --mono:
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+}
+
+*{
+  box-sizing:border-box;
+}
+
+html,
+body{
+  margin:0;
+  min-height:100%;
+  background:var(--bg);
+  color:var(--text);
+  font-family:
+    Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+body{
+  padding:0;
+}
+
+button{
+  font:inherit;
+}
+
+.shell{
+  width:min(1440px,100%);
+  margin:0 auto;
+  padding:0 20px 28px;
+}
+
+/* ─────────────────────────
+   TOP BAR
+───────────────────────── */
+
+.topbar{
+  min-height:62px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  border-bottom:1px solid var(--line-soft);
+}
+
+.brand{
+  display:flex;
+  align-items:center;
+  gap:11px;
+  min-width:0;
+}
+
+.brand-mark{
+  width:31px;
+  height:31px;
+  display:grid;
+  place-items:center;
+  border:1px solid #2b3540;
+  border-radius:7px;
+  background:#0f1419;
+  color:var(--accent);
+  font-family:var(--mono);
+  font-size:0;
+  font-weight:800;
+  letter-spacing:0;
+}
+
+
+.mark-bars{
+  display:flex;
+  align-items:flex-end;
+  gap:2px;
+  height:14px;
+}
+
+.mark-bars i{
+  display:block;
+  width:3px;
+  border-radius:1px;
+  background:var(--accent);
+}
+
+.mark-bars i:nth-child(1){height:7px}
+.mark-bars i:nth-child(2){height:13px}
+.mark-bars i:nth-child(3){height:10px}
+
+.brand-name{
+  font-size:14px;
+  font-weight:700;
+  letter-spacing:-.02em;
+}
+
+.brand-sub{
+  margin-top:2px;
+  color:var(--muted);
+  font-size:11px;
+}
+
+.actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+.badge{
+  min-height:27px;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  padding:0 9px;
+  border:1px solid var(--line);
+  border-radius:6px;
+  background:var(--surface);
+  color:var(--text-2);
+  font-family:var(--mono);
+  font-size:11px;
+  white-space:nowrap;
+}
+
+.dot{
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--muted);
+}
+
+.badge.online .dot{
+  background:var(--green);
+  box-shadow:0 0 0 3px rgba(99,214,154,.08);
+}
+
+.badge.offline .dot{
+  background:var(--red);
+}
+
+.refresh{
+  height:28px;
+  border:1px solid var(--line);
+  border-radius:6px;
+  background:var(--surface);
+  color:var(--text-2);
+  padding:0 10px;
+  cursor:pointer;
+  font-size:11px;
+}
+
+.refresh:hover{
+  border-color:#38434e;
+  color:var(--text);
+}
+
+/* ─────────────────────────
+   CONTEXT
+───────────────────────── */
+
+.context{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:20px;
+  padding:20px 0 16px;
+}
+
+.eyebrow{
+  color:var(--accent);
+  font-family:var(--mono);
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+
+.context h1{
+  margin:5px 0 0;
+  font-size:22px;
+  font-weight:650;
+  letter-spacing:-.035em;
+}
+
+.context p{
+  margin:6px 0 0;
+  max-width:720px;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.55;
+}
+
+.last-check{
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:10px;
+  white-space:nowrap;
+}
+
+/* ─────────────────────────
+   STATUS STRIP
+───────────────────────── */
+
+.status-strip{
+  display:grid;
+  grid-template-columns:repeat(6,1fr);
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--surface);
+  margin-bottom:12px;
+}
+
+.metric{
+  min-width:0;
+  padding:12px 14px;
+  border-right:1px solid var(--line);
+}
+
+.metric:last-child{
+  border-right:0;
+}
+
+.metric-label{
+  color:var(--muted);
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+
+.metric-value{
+  margin-top:5px;
+  font-size:15px;
+  font-weight:650;
+  letter-spacing:-.02em;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.metric-meta{
+  margin-top:3px;
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:10px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* ─────────────────────────
+   MAIN GRID
+───────────────────────── */
+
+.layout{
+  display:grid;
+  grid-template-columns:minmax(0,1.6fr) minmax(350px,.7fr);
+  gap:12px;
+  align-items:start;
+}
+
+.stack{
+  display:grid;
+  gap:12px;
+  align-content:start;
+}
+
+.panel{
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--surface);
+}
+
+.panel.primary{
+  border-color:#26313b;
+}
+
+.panel-head{
+  min-height:40px;
+  padding:0 14px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  border-bottom:1px solid var(--line);
+}
+
+.panel-title{
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.005em;
+}
+
+.panel-meta{
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:10px;
+}
+
+/* ─────────────────────────
+   ROWS
+───────────────────────── */
+
+.rows{
+  display:grid;
+}
+
+.row{
+  min-height:38px;
+  display:grid;
+  grid-template-columns:180px minmax(0,1fr) auto;
+  gap:14px;
+  align-items:center;
+  padding:7px 14px;
+  border-bottom:1px solid var(--line-soft);
+}
+
+.row:last-child{
+  border-bottom:0;
+}
+
+.row-key{
+  color:var(--muted);
+  font-size:12px;
+}
+
+.row-value{
+  min-width:0;
+  color:var(--text-2);
+  font-family:var(--mono);
+  font-size:10px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.row-state{
+  justify-self:end;
+}
+
+/* ─────────────────────────
+   CHIPS
+───────────────────────── */
+
+.chip{
+  min-height:20px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 7px;
+  border:1px solid var(--line);
+  border-radius:5px;
+  background:var(--surface-2);
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:8px;
+  white-space:nowrap;
+}
+
+.chip.good{
+  color:var(--green);
+  border-color:rgba(99,214,154,.24);
+  background:var(--green-soft);
+}
+
+.chip.warn{
+  color:var(--amber);
+  border-color:rgba(228,183,94,.24);
+  background:var(--amber-soft);
+}
+
+.chip.bad{
+  color:var(--red);
+  border-color:rgba(234,115,123,.24);
+  background:var(--red-soft);
+}
+
+.chip.info{
+  color:var(--accent);
+  border-color:rgba(87,200,255,.24);
+  background:var(--accent-soft);
+}
+
+/* ─────────────────────────
+   TABLE
+───────────────────────── */
+
+.table-wrap{
+  overflow:auto;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+th,
+td{
+  text-align:left;
+  border-bottom:1px solid var(--line-soft);
+  padding:9px 13px;
+}
+
+th{
+  background:#0a0d11;
+  color:var(--muted);
+  font-size:8px;
+  font-weight:800;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+td{
+  color:var(--text-2);
+  font-size:11px;
+}
+
+td.mono{
+  font-family:var(--mono);
+}
+
+tr:last-child td{
+  border-bottom:0;
+}
+
+/* ─────────────────────────
+   READINESS
+───────────────────────── */
+
+.readiness-summary{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  border-bottom:1px solid var(--line);
+}
+
+.readiness-stat{
+  padding:12px 13px;
+  border-right:1px solid var(--line);
+}
+
+.readiness-stat:last-child{
+  border-right:0;
+}
+
+.readiness-stat span{
+  display:block;
+}
+
+.readiness-stat .name{
+  color:var(--muted);
+  font-size:8px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.readiness-stat .score{
+  margin-top:5px;
+  font-family:var(--mono);
+  font-size:16px;
+  font-weight:700;
+}
+
+.readiness-meter{
+  height:3px;
+  margin-top:8px;
+  background:#171c22;
+  border-radius:99px;
+  overflow:hidden;
+}
+
+.readiness-meter > span{
+  display:block;
+  width:0;
+  height:100%;
+  background:var(--accent);
+  border-radius:inherit;
+  transition:width .25s ease;
+}
+
+.check-group{
+  padding:3px 0;
+}
+
+.group-title{
+  min-height:28px;
+  display:flex;
+  align-items:center;
+  padding:0 13px;
+  color:var(--muted);
+  font-size:8px;
+  font-weight:800;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  border-bottom:1px solid var(--line-soft);
+}
+
+.check{
+  min-height:35px;
+  display:grid;
+  grid-template-columns:16px 1fr auto;
+  gap:9px;
+  align-items:center;
+  padding:6px 13px;
+  border-bottom:1px solid var(--line-soft);
+}
+
+.check:last-child{
+  border-bottom:0;
+}
+
+.check-icon{
+  width:15px;
+  height:15px;
+  display:grid;
+  place-items:center;
+  border:1px solid var(--line);
+  border-radius:4px;
+  font-family:var(--mono);
+  font-size:8px;
+}
+
+.check-icon.good{
+  color:var(--green);
+  border-color:rgba(99,214,154,.25);
+  background:var(--green-soft);
+}
+
+.check-icon.bad{
+  color:var(--red);
+  border-color:rgba(234,115,123,.25);
+  background:var(--red-soft);
+}
+
+.check-icon.warn{
+  color:var(--amber);
+  border-color:rgba(228,183,94,.25);
+  background:var(--amber-soft);
+}
+
+.check-label{
+  color:var(--text-2);
+  font-size:11px;
+}
+
+.check-sub{
+  margin-top:2px;
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:9px;
+}
+
+/* ─────────────────────────
+   DIAGNOSTICS
+───────────────────────── */
+
+details{
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--surface);
+  overflow:hidden;
+}
+
+summary{
+  min-height:39px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 14px;
+  cursor:pointer;
+  list-style:none;
+  font-size:10px;
+  font-weight:700;
+}
+
+summary::-webkit-details-marker{
+  display:none;
+}
+
+summary::after{
+  content:"+";
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:13px;
+}
+
+details[open] summary::after{
+  content:"−";
+}
+
+.codebox{
+  margin:0;
+  padding:12px 14px;
+  border-top:1px solid var(--line);
+  background:#070a0d;
+  color:#98a4af;
+  font-family:var(--mono);
+  font-size:9px;
+  line-height:1.65;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  max-height:320px;
+  overflow:auto;
+}
+
+/* ─────────────────────────
+   FOOTER
+───────────────────────── */
+
+.footer{
+  margin-top:16px;
+  padding:11px 2px 0;
+  border-top:1px solid var(--line-soft);
+  display:flex;
+  justify-content:space-between;
+  gap:20px;
+  color:#65707c;
+  font-family:var(--mono);
+  font-size:9px;
+}
+
+/* ─────────────────────────
+   COLORS
+───────────────────────── */
+
+.green{color:var(--green)}
+.red{color:var(--red)}
+.amber{color:var(--amber)}
+.accent{color:var(--accent)}
+
+/* ─────────────────────────
+   RESPONSIVE
+───────────────────────── */
+
+@media(max-width:1100px){
+
+  .status-strip{
+    grid-template-columns:repeat(3,1fr);
+  }
+
+  .metric:nth-child(3){
+    border-right:0;
+  }
+
+  .metric:nth-child(-n+3){
+    border-bottom:1px solid var(--line);
+  }
+
+  .layout{
+    grid-template-columns:1fr;
+  }
+}
+
+@media(max-width:700px){
+
+  .shell{
+    padding:0 12px 22px;
+  }
+
+  .topbar{
+    padding:10px 0;
+    align-items:flex-start;
+  }
+
+  .context{
+    flex-direction:column;
+    align-items:flex-start;
+  }
+
+  .status-strip{
+    grid-template-columns:repeat(2,1fr);
+  }
+
+  .metric:nth-child(2n){
+    border-right:0;
+  }
+
+  .metric:nth-child(-n+4){
+    border-bottom:1px solid var(--line);
+  }
+
+  .row{
+    grid-template-columns:120px minmax(0,1fr);
+  }
+
+  .row-state{
+    grid-column:2;
+    justify-self:start;
+  }
+
+  .readiness-summary{
+    grid-template-columns:1fr;
+  }
+
+  .readiness-stat{
+    border-right:0;
+    border-bottom:1px solid var(--line);
+  }
+
+  .readiness-stat:last-child{
+    border-bottom:0;
+  }
+
+  .footer{
+    flex-direction:column;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="shell">
+
+<header class="topbar">
+
+  <div class="brand">
+    <div class="brand-mark" aria-label="Monceda Edge">
+      <span class="mark-bars">
+        <i></i><i></i><i></i>
+      </span>
+    </div>
+
+    <div>
+      <div class="brand-name">Monceda Edge</div>
+      <div class="brand-sub">portable edge runtime</div>
+    </div>
+  </div>
+
+  <div class="actions">
+
+    <div id="runtimeBadge" class="badge offline">
+      <span class="dot"></span>
+      <span id="runtimeBadgeText">offline</span>
+    </div>
+
+    <div id="nodeBadge" class="badge">
+      node: local
+    </div>
+
+    <div id="versionBadge" class="badge">
+      v—
+    </div>
+
+    <button id="refreshBtn" class="refresh">
+      Refresh
+    </button>
+
+  </div>
+
+</header>
+
+
+<section class="context">
+
+  <div>
+
+    <div class="eyebrow">
+      Operator Console
+    </div>
+
+    <h1>
+      Edge control center
+    </h1>
+
+    <p>
+      Runtime, routes, TLS, certificate automation,
+      public-node readiness and network preflight.
+    </p>
+
+  </div>
+
+  <div id="lastCheck" class="last-check">
+    last check: —
+  </div>
+
+</section>
+
+
+<section class="status-strip">
+
+  <div class="metric">
+    <div class="metric-label">Runtime</div>
+    <div id="runtimeMetric" class="metric-value red">
+      Offline
+    </div>
+    <div class="metric-meta">
+      edge process
+    </div>
+  </div>
+
+  <div class="metric">
+    <div class="metric-label">Upstream</div>
+    <div id="upstreamMetric" class="metric-value">
+      —
+    </div>
+    <div id="upstreamMeta" class="metric-meta">
+      reverse proxy
+    </div>
+  </div>
+
+  <div class="metric">
+    <div class="metric-label">Cache</div>
+    <div id="cacheMetric" class="metric-value">
+      —
+    </div>
+    <div id="cacheMeta" class="metric-meta">
+      —
+    </div>
+  </div>
+
+  <div class="metric">
+    <div class="metric-label">TLS</div>
+    <div id="tlsMetric" class="metric-value">
+      —
+    </div>
+    <div id="tlsMeta" class="metric-meta">
+      certificate
+    </div>
+  </div>
+
+  <div class="metric">
+    <div class="metric-label">ACME</div>
+    <div id="acmeMetric" class="metric-value">
+      —
+    </div>
+    <div id="acmeMeta" class="metric-meta">
+      certificate automation
+    </div>
+  </div>
+
+  <div class="metric">
+    <div class="metric-label">Public Node</div>
+    <div id="publicMetric" class="metric-value">
+      —
+    </div>
+    <div id="publicMeta" class="metric-meta">
+      network state
+    </div>
+  </div>
+
+</section>
+
+
+<main class="layout">
+
+<section class="stack">
+
+  <div class="panel primary">
+
+    <div class="panel-head">
+      <div class="panel-title">Runtime</div>
+      <div id="runtimeMode" class="panel-meta">—</div>
+    </div>
+
+    <div class="rows">
+
+      <div class="row">
+        <div class="row-key">Service</div>
+        <div id="serviceValue" class="row-value">—</div>
+        <div id="serviceState" class="row-state chip">unknown</div>
+      </div>
+
+      <div class="row">
+        <div class="row-key">Version</div>
+        <div id="versionValue" class="row-value">—</div>
+        <div></div>
+      </div>
+
+      <div class="row">
+        <div class="row-key">Mode</div>
+        <div id="modeValue" class="row-value">—</div>
+        <div></div>
+      </div>
+
+      <div class="row">
+        <div class="row-key">Default upstream</div>
+        <div id="upstreamValue" class="row-value">—</div>
+        <div id="upstreamState" class="row-state chip">unknown</div>
+      </div>
+
+      <div class="row">
+        <div class="row-key">Configured routes</div>
+        <div id="routeCountValue" class="row-value">—</div>
+        <div></div>
+      </div>
+
+      <div class="row">
+        <div class="row-key">Cache TTL</div>
+        <div id="cacheTtlValue" class="row-value">—</div>
+        <div id="cacheState" class="row-state chip">unknown</div>
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <div class="panel primary">
+
+    <div class="panel-head">
+      <div class="panel-title">Route Table</div>
+      <div id="routeCountLabel" class="panel-meta">
+        0 routes
+      </div>
+    </div>
+
+    <div class="table-wrap">
+
+      <table>
+
+        <thead>
+          <tr>
+            <th>Hostname</th>
+            <th>Upstream</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+
+        <tbody id="routesBody">
+
+          <tr>
+            <td colspan="3">
+              Waiting for runtime…
+            </td>
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+
+  <div class="panel">
+
+    <div class="panel-head">
+      <div class="panel-title">
+        Network & Ports
+      </div>
+
+      <div class="panel-meta">
+        public-node preflight
+      </div>
+    </div>
+
+    <div class="rows">
+
+      <div class="row">
+        <div class="row-key">Primary domain</div>
+        <div id="primaryDomainValue" class="row-value">—</div>
+        <div id="domainState" class="row-state chip">unknown</div>
+      </div>
+
+      <div class="row">
+        <div class="row-key">Expected IPv4</div>
+        <div id="expectedIpv4Value" class="row-value">—</div>
+        <div id="ipState" class="row-state chip">unknown</div>
+      </div>
+
+      <div class="row">
+        <div class="row-key">DNS resolution</div>
+        <div id="dnsValue" class="row-value">—</div>
+        <div id="dnsState" class="row-state chip">unknown</div>
+      </div>
+
+      <div class="row">
+        <div class="row-key">HTTP</div>
+        <div id="httpPortValue" class="row-value">—</div>
+        <div id="httpPortState" class="row-state chip">unknown</div>
+      </div>
+
+      <div class="row">
+        <div class="row-key">HTTPS</div>
+        <div id="httpsPortValue" class="row-value">—</div>
+        <div id="httpsPortState" class="row-state chip">unknown</div>
+      </div>
+
+      <div class="row">
+        <div class="row-key">Reachability</div>
+        <div id="reachabilityValue" class="row-value">—</div>
+        <div id="reachabilityState" class="row-state chip">unknown</div>
+      </div>
+
+    </div>
+
+  </div>
+
+</section>
+
+
+<aside class="stack">
+
+  <div class="panel primary">
+
+    <div class="panel-head">
+      <div class="panel-title">
+        Node Readiness
+      </div>
+
+      <div id="readinessMode" class="panel-meta">
+        —
+      </div>
+    </div>
+
+
+    <div class="readiness-summary">
+
+      <div class="readiness-stat">
+        <span class="name">Deployment</span>
+        <span id="deploymentScore" class="score">0/0</span>
+        <div class="readiness-meter"><span id="deploymentMeter"></span></div>
+      </div>
+
+      <div class="readiness-stat">
+        <span class="name">ACME</span>
+        <span id="acmeScore" class="score">0/0</span>
+        <div class="readiness-meter"><span id="acmeMeter"></span></div>
+      </div>
+
+      <div class="readiness-stat">
+        <span class="name">Network</span>
+        <span id="networkScore" class="score">0/0</span>
+        <div class="readiness-meter"><span id="networkMeter"></span></div>
+      </div>
+
+    </div>
+
+
+    <div class="group-title">
+      Deployment
+    </div>
+
+    <div id="deploymentChecks" class="check-group"></div>
+
+
+    <div class="group-title">
+      ACME
+    </div>
+
+    <div id="acmeChecks" class="check-group"></div>
+
+  </div>
+
+
+  <div class="panel">
+
+    <div class="panel-head">
+
+      <div class="panel-title">
+        Certificate & Node State
+      </div>
+
+      <div id="certificateEnvironment" class="panel-meta">
+        —
+      </div>
+
+    </div>
+
+    <div class="rows">
+
+      <div class="row">
+        <div class="row-key">TLS mode</div>
+        <div id="tlsModeValue" class="row-value">—</div>
+        <div id="tlsState" class="row-state chip">unknown</div>
+      </div>
+
+      <div class="row">
+        <div class="row-key">ACME runtime</div>
+        <div id="acmeRuntimeValue" class="row-value">—</div>
+        <div id="acmeRuntimeState" class="row-state chip">unknown</div>
+      </div>
+
+      <div class="row">
+        <div class="row-key">Public node</div>
+        <div id="publicNodeValue" class="row-value">—</div>
+        <div id="publicNodeState" class="row-state chip">unknown</div>
+      </div>
+
+      <div class="row">
+        <div class="row-key">ACME cache</div>
+        <div id="acmeCacheValue" class="row-value">—</div>
+        <div id="acmeCacheState" class="row-state chip">unknown</div>
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <details>
+
+    <summary>
+      Raw diagnostics
+    </summary>
+
+    <pre id="diagnostics" class="codebox">waiting for edge runtime...</pre>
+
+  </details>
+
+</aside>
+
+</main>
+
+
+<footer class="footer">
+
+  <span>
+    Monceda Edge • local operator console
+  </span>
+
+  <span>
+    portable • self-hosted • open infrastructure
+  </span>
+
+</footer>
+
+</div>
+
+
+<script>
+const EDGE = "https://127.0.0.1:8443";
+
+const $ = id =>
+  document.getElementById(id);
+
+
+async function json(path){
+
+  const response =
+    await fetch(EDGE + path,{
+      cache:"no-store"
+    });
+
+  if(!response.ok){
+    throw new Error(
+      `${path}: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+
+function chip(el,type,text){
+
+  el.className =
+    `row-state chip ${type || ""}`;
+
+  el.textContent = text;
+}
+
+
+function addCheck(
+  container,
+  label,
+  value,
+  detail
+){
+
+  const row =
+    document.createElement("div");
+
+  row.className = "check";
+
+
+  const icon =
+    document.createElement("div");
+
+  icon.className =
+    `check-icon ${value ? "good" : "bad"}`;
+
+  icon.textContent =
+    value ? "✓" : "×";
+
+
+  const content =
+    document.createElement("div");
+
+
+  const title =
+    document.createElement("div");
+
+  title.className =
+    "check-label";
+
+  title.textContent =
+    label;
+
+
+  const sub =
+    document.createElement("div");
+
+  sub.className =
+    "check-sub";
+
+  sub.textContent =
+    detail ||
+    (value ? "passed" : "not satisfied");
+
+
+  content.appendChild(title);
+  content.appendChild(sub);
+
+  row.appendChild(icon);
+  row.appendChild(content);
+
+  container.appendChild(row);
+}
+
+
+function score(values){
+
+  const total =
+    values.length;
+
+  const passed =
+    values.filter(Boolean).length;
+
+  return `${passed}/${total}`;
+}
+
+function meter(id, values){
+
+  const total = values.length || 1;
+  const passed = values.filter(Boolean).length;
+
+  $(id).style.width =
+    `${Math.round((passed / total) * 100)}%`;
+}
+
+
+function renderRoutes(data){
+
+  const routes =
+    Array.isArray(data.routes)
+      ? data.routes
+      : [];
+
+  $("routeCountValue").textContent =
+    String(
+      data.count ??
+      routes.length
+    );
+
+  $("routeCountLabel").textContent =
+    `${routes.length} route${
+      routes.length === 1 ? "" : "s"
+    }`;
+
+  const body =
+    $("routesBody");
+
+  body.innerHTML = "";
+
+
+  if(!routes.length){
+
+    body.innerHTML = `
+      <tr>
+        <td colspan="3">
+          No configured hostname routes.
+        </td>
+      </tr>
+    `;
+
+    return;
+  }
+
+
+  for(const route of routes){
+
+    const tr =
+      document.createElement("tr");
+
+    const host =
+      document.createElement("td");
+
+    const upstream =
+      document.createElement("td");
+
+    const status =
+      document.createElement("td");
+
+
+    host.className = "mono";
+    upstream.className = "mono";
+
+
+    host.textContent =
+      route.host || "—";
+
+    upstream.textContent =
+      route.upstream || "—";
+
+    status.innerHTML =
+      '<span class="chip good">active</span>';
+
+
+    tr.appendChild(host);
+    tr.appendChild(upstream);
+    tr.appendChild(status);
+
+    body.appendChild(tr);
+  }
+}
+
+
+function renderReadiness(data){
+
+  const deployment =
+    $("deploymentChecks");
+
+  deployment.innerHTML = "";
+
+
+  $("readinessMode").textContent =
+    data.mode || "unknown";
+
+
+  const ports =
+    data.public_ports || {};
+
+  const domains =
+    data.public_domains || {};
+
+  const acme =
+    data.acme || {};
+
+
+  const deploymentValues = [
+    true,
+    !!domains.valid,
+    !!ports.valid,
+    !!acme.cache_configured
+  ];
+
+
+  $("deploymentScore").textContent =
+    score(deploymentValues);
+
+  meter(
+    "deploymentMeter",
+    deploymentValues
+  );
+
+
+  addCheck(
+    deployment,
+    "Runtime configuration",
+    true,
+    `mode: ${data.mode || "unknown"}`
+  );
+
+
+  addCheck(
+    deployment,
+    "Public domain",
+    !!domains.valid,
+    domains.required
+      ? "required"
+      : "optional in development"
+  );
+
+
+  addCheck(
+    deployment,
+    "Public ports",
+    !!ports.valid,
+    `${ports.http ?? "—"} / ${ports.https ?? "—"}`
+  );
+
+
+  addCheck(
+    deployment,
+    "Persistent ACME cache",
+    !!acme.cache_configured,
+    acme.cache_configured
+      ? "available"
+      : "unavailable"
+  );
+}
+
+
+function renderActivation(data){
+
+  const container =
+    $("acmeChecks");
+
+  container.innerHTML = "";
+
+
+  const c =
+    data.checks || {};
+
+  const env =
+    data.environment || {};
+
+
+  const entries = [
+    ["ACME enabled",c.acme_enabled],
+    ["Public node",c.public_node_enabled],
+    ["Primary domain",!!c.primary_domain],
+    ["Eligible domain",c.domain_eligible],
+    ["Route configured",c.route_configured],
+    ["Contact configured",c.contact_configured],
+    ["Port 80",c.http_port_80],
+    ["Port 443",c.https_port_443]
+  ];
+
+
+  const acmeValues =
+    entries.map(
+      item => !!item[1]
+    );
+
+  $("acmeScore").textContent =
+    score(acmeValues);
+
+  meter(
+    "acmeMeter",
+    acmeValues
+  );
+
+
+  for(const [label,value] of entries){
+
+    addCheck(
+      container,
+      label,
+      !!value
+    );
+  }
+
+
+  $("certificateEnvironment").textContent =
+    env.configured || "—";
+
+
+  $("acmeRuntimeValue").textContent =
+    data.runtime_ready
+      ? "ready"
+      : "guarded";
+
+
+  chip(
+    $("acmeRuntimeState"),
+    data.runtime_ready
+      ? "good"
+      : "warn",
+    data.runtime_ready
+      ? "ready"
+      : "blocked"
+  );
+
+
+  $("acmeMetric").textContent =
+    env.configured === "staging"
+      ? "Staging"
+      : (
+        data.runtime_ready
+          ? "Ready"
+          : "Guarded"
+      );
+
+
+  $("acmeMetric").className =
+    `metric-value ${
+      data.runtime_ready
+        ? "green"
+        : "amber"
+    }`;
+
+
+  $("acmeMeta").textContent =
+    data.runtime_ready
+      ? "issuance ready"
+      : "activation blocked";
+}
+
+
+function renderNetwork(data){
+
+  $("primaryDomainValue").textContent =
+    data.primary_domain ||
+    "not configured";
+
+  chip(
+    $("domainState"),
+    data.primary_domain
+      ? "good"
+      : "warn",
+    data.primary_domain
+      ? "configured"
+      : "not configured"
+  );
+
+
+  $("expectedIpv4Value").textContent =
+    data.expected_ipv4 ||
+    "not configured";
+
+  chip(
+    $("ipState"),
+    data.expected_ipv4_match
+      ? "good"
+      : "warn",
+    data.expected_ipv4_match
+      ? "match"
+      : "not verified"
+  );
+
+
+  const resolved =
+    Array.isArray(data.resolved_ips)
+      ? data.resolved_ips
+      : [];
+
+  $("dnsValue").textContent =
+    resolved.length
+      ? resolved.join(", ")
+      : "no resolution";
+
+  chip(
+    $("dnsState"),
+    data.dns_resolves
+      ? "good"
+      : "warn",
+    data.dns_resolves
+      ? "resolved"
+      : "unresolved"
+  );
+
+
+  const http =
+    data.http01 || {};
+
+  $("httpPortValue").textContent =
+    String(
+      http.configured_port ??
+      "—"
+    );
+
+  chip(
+    $("httpPortState"),
+    http.configured_correctly
+      ? "good"
+      : "warn",
+    http.configured_correctly
+      ? "public"
+      : "local"
+  );
+
+
+  const https =
+    data.https || {};
+
+  $("httpsPortValue").textContent =
+    String(
+      https.configured_port ??
+      "—"
+    );
+
+  chip(
+    $("httpsPortState"),
+    https.configured_correctly
+      ? "good"
+      : "warn",
+    https.configured_correctly
+      ? "public"
+      : "local"
+  );
+
+
+  $("reachabilityValue").textContent =
+    data.message || "—";
+
+  chip(
+    $("reachabilityState"),
+    data.external_reachability_verified
+      ? "good"
+      : "warn",
+    data.external_reachability_verified
+      ? "verified"
+      : "not verified"
+  );
+
+
+  const networkValues = [
+    !!data.primary_domain,
+    !!data.dns_resolves,
+    !!data.expected_ipv4_match,
+    !!http.configured_correctly,
+    !!https.configured_correctly,
+    !!data.external_reachability_verified
+  ];
+
+
+  $("networkScore").textContent =
+    score(networkValues);
+
+  meter(
+    "networkMeter",
+    networkValues
+  );
+
+
+  const publicReady =
+    networkValues.every(Boolean);
+
+
+  $("publicMetric").textContent =
+    publicReady
+      ? "Ready"
+      : "Local";
+
+
+  $("publicMetric").className =
+    `metric-value ${
+      publicReady
+        ? "green"
+        : "amber"
+    }`;
+
+
+  $("publicMeta").textContent =
+    data.primary_domain ||
+    "no public domain";
+}
+
+
+async function refresh(){
+
+  const diag = {
+    checkedAt:
+      new Date().toISOString()
+  };
+
+
+  $("lastCheck").textContent =
+    "checking…";
+
+
+  let online = false;
+
+
+  try{
+
+    const health =
+      await json("/_edge/health");
+
+    diag.health =
+      health;
+
+    online = true;
+
+
+    $("runtimeMetric").textContent =
+      "Online";
+
+    $("runtimeMetric").className =
+      "metric-value green";
+
+
+    $("runtimeBadge").className =
+      "badge online";
+
+    $("runtimeBadgeText").textContent =
+      "online";
+
+
+    $("versionBadge").textContent =
+      `v${health.version || "—"}`;
+
+
+    $("serviceValue").textContent =
+      health.service ||
+      "monceda-edge";
+
+
+    $("versionValue").textContent =
+      health.version || "—";
+
+
+    $("modeValue").textContent =
+      health.mode || "—";
+
+
+    $("runtimeMode").textContent =
+      health.mode || "—";
+
+
+    chip(
+      $("serviceState"),
+      "good",
+      health.status || "healthy"
+    );
+
+  }catch(error){
+
+    $("runtimeMetric").textContent =
+      "Offline";
+
+    $("runtimeMetric").className =
+      "metric-value red";
+
+
+    $("runtimeBadge").className =
+      "badge offline";
+
+    $("runtimeBadgeText").textContent =
+      "offline";
+
+
+    diag.healthError =
+      String(error);
+  }
+
+
+  if(online){
+
+    try{
+
+      const upstream =
+        await json("/_edge/upstream");
+
+      diag.upstream =
+        upstream;
+
+
+      const target =
+        upstream.upstream ||
+        upstream.target ||
+        upstream.url ||
+        "—";
+
+
+      $("upstreamMetric").textContent =
+        "Connected";
+
+      $("upstreamMetric").className =
+        "metric-value green";
+
+
+      $("upstreamMeta").textContent =
+        target;
+
+
+      $("upstreamValue").textContent =
+        target;
+
+
+      chip(
+        $("upstreamState"),
+        "good",
+        "active"
+      );
+
+    }catch(error){
+
+      diag.upstreamError =
+        String(error);
+
+      $("upstreamMetric").textContent =
+        "Unavailable";
+
+      $("upstreamMetric").className =
+        "metric-value red";
+
+      chip(
+        $("upstreamState"),
+        "bad",
+        "failed"
+      );
+    }
+
+
+    try{
+
+      const cache =
+        await json("/_edge/cache");
+
+      diag.cache =
+        cache;
+
+
+      const enabled =
+        cache.enabled !== false;
+
+
+      $("cacheMetric").textContent =
+        enabled
+          ? "Enabled"
+          : "Disabled";
+
+
+      $("cacheMetric").className =
+        `metric-value ${
+          enabled
+            ? "green"
+            : "amber"
+        }`;
+
+
+      const ttl =
+        cache.ttl_seconds ??
+        cache.ttl ??
+        "—";
+
+
+      $("cacheMeta").textContent =
+        `TTL ${ttl}s`;
+
+
+      $("cacheTtlValue").textContent =
+        `${ttl}s`;
+
+
+      chip(
+        $("cacheState"),
+        enabled
+          ? "good"
+          : "warn",
+        enabled
+          ? "enabled"
+          : "disabled"
+      );
+
+    }catch(error){
+
+      diag.cacheError =
+        String(error);
+    }
+
+
+    try{
+
+      const routes =
+        await json("/_edge/routes");
+
+      diag.routes =
+        routes;
+
+      renderRoutes(routes);
+
+    }catch(error){
+
+      diag.routesError =
+        String(error);
+    }
+
+
+    try{
+
+      const acme =
+        await json("/_edge/acme");
+
+      diag.acme =
+        acme;
+
+
+      const tlsMode =
+        acme.tls_mode ||
+        "configured-certificate";
+
+
+      $("tlsModeValue").textContent =
+        tlsMode;
+
+
+      $("tlsMetric").textContent =
+        tlsMode === "acme"
+          ? "ACME"
+          : "Local cert";
+
+
+      $("tlsMetric").className =
+        "metric-value green";
+
+
+      $("tlsMeta").textContent =
+        tlsMode;
+
+
+      chip(
+        $("tlsState"),
+        "good",
+        "enabled"
+      );
+
+
+      $("acmeCacheValue").textContent =
+        acme.cache_dir || "—";
+
+
+      chip(
+        $("acmeCacheState"),
+        acme.cache_dir
+          ? "good"
+          : "warn",
+        acme.cache_dir
+          ? "configured"
+          : "missing"
+      );
+
+    }catch(error){
+
+      diag.acmeError =
+        String(error);
+    }
+
+
+    try{
+
+      const readiness =
+        await json("/_edge/readiness");
+
+      diag.readiness =
+        readiness;
+
+      renderReadiness(readiness);
+
+    }catch(error){
+
+      diag.readinessError =
+        String(error);
+    }
+
+
+    try{
+
+      const activation =
+        await json("/_edge/acme-activation");
+
+      diag.activation =
+        activation;
+
+      renderActivation(activation);
+
+
+      const checks =
+        activation.checks || {};
+
+
+      $("publicNodeValue").textContent =
+        checks.public_node_enabled
+          ? "enabled"
+          : "disabled";
+
+
+      chip(
+        $("publicNodeState"),
+        checks.public_node_enabled
+          ? "good"
+          : "warn",
+        checks.public_node_enabled
+          ? "enabled"
+          : "local"
+      );
+
+    }catch(error){
+
+      diag.activationError =
+        String(error);
+    }
+
+
+    try{
+
+      const network =
+        await json("/_edge/network-check");
+
+      diag.network =
+        network;
+
+      renderNetwork(network);
+
+    }catch(error){
+
+      diag.networkError =
+        String(error);
+    }
+  }
+
+
+  $("diagnostics").textContent =
+    JSON.stringify(
+      diag,
+      null,
+      2
+    );
+
+
+  const now =
+    new Date();
+
+
+  $("lastCheck").textContent =
+    `last check: ${
+      now.toLocaleTimeString([],{
+        hour:"2-digit",
+        minute:"2-digit",
+        second:"2-digit"
+      })
+    }`;
+}
+
+
+$("refreshBtn")
+  .addEventListener(
+    "click",
+    refresh
+  );
+
+
+refresh();
+
+setInterval(
+  refresh,
+  5000
+);
+</script>
+
+</body>
+</html>

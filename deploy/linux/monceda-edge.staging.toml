@@ -1,0 +1,45 @@
+[server]
+host = "0.0.0.0"
+port = 8787
+static_dir = "public"
+
+[proxy]
+enabled = true
+upstream = "http://127.0.0.1:3000"
+health_path = "/"
+
+[cache]
+enabled = true
+ttl_seconds = 30
+
+[public_node]
+enabled = true
+primary_domain = "edge-test.moncedalabs.com"
+expected_ipv4 = ""
+
+[deployment]
+mode = "production"
+require_public_ports = true
+require_public_domains = true
+
+[http]
+enabled = true
+port = 80
+redirect_to_https = true
+
+[acme]
+enabled = true
+environment = "staging"
+email = ""
+cache_dir = "/var/lib/monceda-edge/acme"
+challenge = "http-01"
+
+[tls]
+enabled = true
+port = 443
+cert = "/var/lib/monceda-edge/fallback/localhost-cert.pem"
+key = "/var/lib/monceda-edge/fallback/localhost-key.pem"
+
+[[routes]]
+host = "edge-test.moncedalabs.com"
+upstream = "http://127.0.0.1:3000"

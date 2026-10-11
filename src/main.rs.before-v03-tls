@@ -1,0 +1,739 @@
+use axum::{
+    body::{to_bytes, Body},
+    extract::State,
+    http::{header, HeaderName, HeaderValue, Request, StatusCode},
+    response::Response,
+    routing::get,
+    Json, Router,
+};
+use clap::{Parser, Subcommand};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::{
+    collections::HashMap,
+    path::{Component, Path, PathBuf},
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tokio::sync::RwLock;
+use tower_http::{compression::CompressionLayer, trace::TraceLayer};
+
+const VERSION: &str = "0.3.0";
+
+#[derive(Parser)]
+#[command(name = "monceda-edge", about = "Portable open-source edge platform")]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    Serve {
+        #[arg(long)]
+        host: Option<String>,
+
+        #[arg(long)]
+        port: Option<u16>,
+
+        #[arg(long, default_value = "monceda-edge.toml")]
+        config: String,
+    },
+
+    Status {
+        #[arg(long, default_value = "monceda-edge.toml")]
+        config: String,
+    },
+
+    Version,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct Config {
+    #[serde(default)]
+    server: ServerConfig,
+
+    #[serde(default)]
+    proxy: ProxyConfig,
+
+    #[serde(default)]
+    cache: CacheConfig,
+
+    #[serde(default)]
+    tls: TlsConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ServerConfig {
+    #[serde(default = "default_host")]
+    host: String,
+
+    #[serde(default = "default_port")]
+    port: u16,
+
+    #[serde(default = "default_static_dir")]
+    static_dir: String,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            host: default_host(),
+            port: default_port(),
+            static_dir: default_static_dir(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ProxyConfig {
+    #[serde(default)]
+    enabled: bool,
+
+    #[serde(default = "default_upstream")]
+    upstream: String,
+
+    #[serde(default = "default_health_path")]
+    health_path: String,
+}
+
+impl Default for ProxyConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            upstream: default_upstream(),
+            health_path: default_health_path(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CacheConfig {
+    #[serde(default = "default_cache_enabled")]
+    enabled: bool,
+
+    #[serde(default = "default_cache_ttl")]
+    ttl_seconds: u64,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_cache_enabled(),
+            ttl_seconds: default_cache_ttl(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct TlsConfig {
+    #[serde(default)]
+    enabled: bool,
+
+    #[serde(default = "default_tls_port")]
+    port: u16,
+
+    #[serde(default = "default_tls_cert")]
+    cert: String,
+
+    #[serde(default = "default_tls_key")]
+    key: String,
+}
+
+impl Default for TlsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            port: default_tls_port(),
+            cert: default_tls_cert(),
+            key: default_tls_key(),
+        }
+    }
+}
+
+fn default_tls_port() -> u16 {
+    8443
+}
+
+fn default_tls_cert() -> String {
+    "certs/localhost-cert.pem".to_string()
+}
+
+fn default_tls_key() -> String {
+    "certs/localhost-key.pem".to_string()
+}
+
+fn default_host() -> String {
+    "127.0.0.1".to_string()
+}
+
+fn default_port() -> u16 {
+    8787
+}
+
+fn default_static_dir() -> String {
+    "public".to_string()
+}
+
+fn default_upstream() -> String {
+    "http://127.0.0.1:3000".to_string()
+}
+
+fn default_health_path() -> String {
+    "/".to_string()
+}
+
+fn default_cache_enabled() -> bool {
+    true
+}
+
+fn default_cache_ttl() -> u64 {
+    30
+}
+
+#[derive(Clone)]
+struct AppState {
+    config: Arc<Config>,
+    client: reqwest::Client,
+    cache: Arc<RwLock<HashMap<String, CacheEntry>>>,
+}
+
+#[derive(Clone)]
+struct CacheEntry {
+    status: u16,
+    body: Vec<u8>,
+    headers: Vec<(String, String)>,
+    expires_at: Instant,
+}
+
+#[derive(Serialize)]
+struct HealthResponse {
+    service: &'static str,
+    status: &'static str,
+    version: &'static str,
+    mode: &'static str,
+}
+
+#[tokio::main]
+async fn main() {
+    let cli = Cli::parse();
+
+    let result = match cli.command {
+        Some(Commands::Serve { host, port, config }) => serve(&config, host, port).await,
+
+        Some(Commands::Status { config }) => status(&config).await,
+
+        Some(Commands::Version) => {
+            println!("Monceda Edge v{VERSION}");
+            Ok(())
+        }
+
+        None => serve("monceda-edge.toml", None, None).await,
+    };
+
+    if let Err(error) = result {
+        eprintln!("{error}");
+        std::process::exit(1);
+    }
+}
+
+async fn serve(
+    config_path: &str,
+    host_override: Option<String>,
+    port_override: Option<u16>,
+) -> Result<(), String> {
+    let mut config = load_config(config_path)?;
+
+    if let Some(host) = host_override {
+        config.server.host = host;
+    }
+
+    if let Some(port) = port_override {
+        config.server.port = port;
+    }
+
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+
+    let state = AppState {
+        config: Arc::new(config.clone()),
+        client,
+        cache: Arc::new(RwLock::new(HashMap::new())),
+    };
+
+    let app = Router::new()
+        .route("/_edge/health", get(edge_health))
+        .route("/_edge/upstream", get(upstream_health))
+        .route("/_edge/cache", get(cache_status))
+        .fallback(edge_fallback)
+        .with_state(state)
+        .layer(CompressionLayer::new())
+        .layer(TraceLayer::new_for_http());
+
+    let mode = if config.proxy.enabled {
+        "reverse-proxy"
+    } else {
+        "static"
+    };
+
+    println!("Monceda Edge v{VERSION}");
+    println!("Mode: {mode}");
+
+    if config.proxy.enabled {
+        println!("Upstream: {}", config.proxy.upstream);
+        println!(
+            "Cache: {} (TTL {}s)",
+            if config.cache.enabled {
+                "enabled"
+            } else {
+                "disabled"
+            },
+            config.cache.ttl_seconds
+        );
+    } else {
+        println!("Static directory: {}", config.server.static_dir);
+    }
+
+    if config.tls.enabled {
+        use axum_server::tls_rustls::RustlsConfig;
+
+        let address = format!("{}:{}", config.server.host, config.tls.port);
+
+        let socket_address: std::net::SocketAddr = address
+            .parse()
+            .map_err(|e| format!("Invalid HTTPS address {address}: {e}"))?;
+
+        let tls_config = RustlsConfig::from_pem_file(&config.tls.cert, &config.tls.key)
+            .await
+            .map_err(|e| format!("Unable to load TLS certificate/key: {e}"))?;
+
+        println!("TLS: enabled");
+        println!("HTTPS listening on https://{address}");
+        println!("Certificate: {}", config.tls.cert);
+
+        axum_server::bind_rustls(socket_address, tls_config)
+            .serve(app.into_make_service())
+            .await
+            .map_err(|e| format!("HTTPS server error: {e}"))
+    } else {
+        let address = format!("{}:{}", config.server.host, config.server.port);
+
+        let listener = match tokio::net::TcpListener::bind(&address).await {
+            Ok(listener) => listener,
+
+            Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {
+                return Err(format!(
+                    "Monceda Edge could not start: port {} is already in use.\n\
+                         Run: lsof -i :{}\n\
+                         Or use another port: monceda-edge serve --port 8788",
+                    config.server.port, config.server.port
+                ));
+            }
+
+            Err(error) => {
+                return Err(format!("Monceda Edge could not bind to {address}: {error}"));
+            }
+        };
+
+        println!("TLS: disabled");
+        println!("HTTP listening on http://{address}");
+
+        axum::serve(listener, app)
+            .await
+            .map_err(|e| format!("Server error: {e}"))
+    }
+}
+
+async fn edge_health(State(state): State<AppState>) -> Json<HealthResponse> {
+    Json(HealthResponse {
+        service: "monceda-edge",
+        status: "ok",
+        version: VERSION,
+        mode: if state.config.proxy.enabled {
+            "reverse-proxy"
+        } else {
+            "static"
+        },
+    })
+}
+
+async fn upstream_health(State(state): State<AppState>) -> Json<serde_json::Value> {
+    if !state.config.proxy.enabled {
+        return Json(json!({
+            "enabled": false,
+            "status": "disabled"
+        }));
+    }
+
+    let url = format!(
+        "{}{}",
+        state.config.proxy.upstream.trim_end_matches('/'),
+        normalize_health_path(&state.config.proxy.health_path)
+    );
+
+    match state.client.get(&url).send().await {
+        Ok(response) => Json(json!({
+            "enabled": true,
+            "status": if response.status().is_success() {
+                "healthy"
+            } else {
+                "unhealthy"
+            },
+            "upstream": state.config.proxy.upstream,
+            "http_status": response.status().as_u16()
+        })),
+
+        Err(error) => Json(json!({
+            "enabled": true,
+            "status": "unreachable",
+            "upstream": state.config.proxy.upstream,
+            "error": error.to_string()
+        })),
+    }
+}
+
+async fn cache_status(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let mut cache = state.cache.write().await;
+    cache.retain(|_, entry| entry.expires_at > Instant::now());
+
+    Json(json!({
+        "enabled": state.config.cache.enabled,
+        "entries": cache.len(),
+        "ttl_seconds": state.config.cache.ttl_seconds
+    }))
+}
+
+async fn edge_fallback(State(state): State<AppState>, request: Request<Body>) -> Response {
+    if state.config.proxy.enabled {
+        proxy_request(state, request).await
+    } else {
+        serve_static(state, request).await
+    }
+}
+
+async fn proxy_request(state: AppState, request: Request<Body>) -> Response {
+    let method = request.method().clone();
+
+    let path_and_query = request
+        .uri()
+        .path_and_query()
+        .map(|v| v.as_str())
+        .unwrap_or("/")
+        .to_string();
+
+    let cache_key = format!("{} {}", method, path_and_query);
+
+    if method == axum::http::Method::GET && state.config.cache.enabled {
+        if let Some(response) = get_cached_response(&state, &cache_key).await {
+            return response;
+        }
+    }
+
+    let upstream_url = format!(
+        "{}{}",
+        state.config.proxy.upstream.trim_end_matches('/'),
+        path_and_query
+    );
+
+    let (parts, body) = request.into_parts();
+
+    let body = match to_bytes(body, 32 * 1024 * 1024).await {
+        Ok(body) => body,
+        Err(error) => {
+            return text_response(
+                StatusCode::BAD_REQUEST,
+                format!("Unable to read request body: {error}"),
+            );
+        }
+    };
+
+    let mut upstream_request = state.client.request(method.clone(), &upstream_url);
+
+    for (name, value) in parts.headers.iter() {
+        if is_hop_by_hop_request_header(name.as_str()) {
+            continue;
+        }
+
+        upstream_request = upstream_request.header(name, value);
+    }
+
+    let upstream_response = match upstream_request.body(body).send().await {
+        Ok(response) => response,
+        Err(error) => {
+            return text_response(
+                StatusCode::BAD_GATEWAY,
+                format!(
+                    "Monceda Edge could not reach upstream {}: {error}",
+                    state.config.proxy.upstream
+                ),
+            );
+        }
+    };
+
+    let status = upstream_response.status();
+
+    let should_cache = method == axum::http::Method::GET
+        && state.config.cache.enabled
+        && status.is_success()
+        && !response_disables_cache(upstream_response.headers());
+
+    let response_headers = collect_response_headers(upstream_response.headers());
+
+    let body = match upstream_response.bytes().await {
+        Ok(bytes) => bytes.to_vec(),
+        Err(error) => {
+            return text_response(
+                StatusCode::BAD_GATEWAY,
+                format!("Unable to read upstream response: {error}"),
+            );
+        }
+    };
+
+    if should_cache {
+        let entry = CacheEntry {
+            status: status.as_u16(),
+            body: body.clone(),
+            headers: response_headers.clone(),
+            expires_at: Instant::now() + Duration::from_secs(state.config.cache.ttl_seconds),
+        };
+
+        state.cache.write().await.insert(cache_key, entry);
+    }
+
+    build_response(status, body, response_headers, false)
+}
+
+async fn get_cached_response(state: &AppState, key: &str) -> Option<Response> {
+    let mut cache = state.cache.write().await;
+
+    let entry = cache.get(key)?.clone();
+
+    if entry.expires_at <= Instant::now() {
+        cache.remove(key);
+        return None;
+    }
+
+    let status = StatusCode::from_u16(entry.status).unwrap_or(StatusCode::OK);
+
+    Some(build_response(status, entry.body, entry.headers, true))
+}
+
+async fn serve_static(state: AppState, request: Request<Body>) -> Response {
+    if request.method() != axum::http::Method::GET && request.method() != axum::http::Method::HEAD {
+        return text_response(
+            StatusCode::METHOD_NOT_ALLOWED,
+            "Method not allowed".to_string(),
+        );
+    }
+
+    let path = request.uri().path();
+
+    let relative = if path == "/" {
+        PathBuf::from("index.html")
+    } else {
+        let raw = path.trim_start_matches('/');
+        let candidate = PathBuf::from(raw);
+
+        if candidate.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        }) {
+            return text_response(StatusCode::BAD_REQUEST, "Invalid path".to_string());
+        }
+
+        candidate
+    };
+
+    let full_path = Path::new(&state.config.server.static_dir).join(relative);
+
+    let metadata = match tokio::fs::metadata(&full_path).await {
+        Ok(metadata) => metadata,
+        Err(_) => {
+            return text_response(StatusCode::NOT_FOUND, "404 - Not Found".to_string());
+        }
+    };
+
+    let full_path = if metadata.is_dir() {
+        full_path.join("index.html")
+    } else {
+        full_path
+    };
+
+    let bytes = match tokio::fs::read(&full_path).await {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            return text_response(StatusCode::NOT_FOUND, "404 - Not Found".to_string());
+        }
+    };
+
+    let mime = mime_guess::from_path(&full_path)
+        .first_or_octet_stream()
+        .to_string();
+
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, mime)
+        .header("x-monceda-edge", VERSION);
+
+    if request.method() == axum::http::Method::HEAD {
+        response
+            .body(Body::empty())
+            .unwrap_or_else(|_| Response::new(Body::empty()))
+    } else {
+        response
+            .body(Body::from(bytes))
+            .unwrap_or_else(|_| Response::new(Body::empty()))
+    }
+}
+
+fn collect_response_headers(headers: &reqwest::header::HeaderMap) -> Vec<(String, String)> {
+    headers
+        .iter()
+        .filter_map(|(name, value)| {
+            if is_hop_by_hop_response_header(name.as_str()) {
+                return None;
+            }
+
+            value
+                .to_str()
+                .ok()
+                .map(|value| (name.to_string(), value.to_string()))
+        })
+        .collect()
+}
+
+fn build_response(
+    status: StatusCode,
+    body: Vec<u8>,
+    headers: Vec<(String, String)>,
+    cache_hit: bool,
+) -> Response {
+    let mut response = Response::builder().status(status);
+
+    if let Some(header_map) = response.headers_mut() {
+        for (name, value) in headers {
+            if let (Ok(name), Ok(value)) = (
+                HeaderName::from_bytes(name.as_bytes()),
+                HeaderValue::from_str(&value),
+            ) {
+                header_map.append(name, value);
+            }
+        }
+
+        header_map.insert(
+            HeaderName::from_static("x-monceda-edge"),
+            HeaderValue::from_static(VERSION),
+        );
+
+        header_map.insert(
+            HeaderName::from_static("x-monceda-cache"),
+            HeaderValue::from_static(if cache_hit { "HIT" } else { "MISS" }),
+        );
+    }
+
+    response
+        .body(Body::from(body))
+        .unwrap_or_else(|_| Response::new(Body::empty()))
+}
+
+fn text_response(status: StatusCode, message: String) -> Response {
+    Response::builder()
+        .status(status)
+        .header(header::CONTENT_TYPE, "text/plain; charset=utf-8")
+        .header("x-monceda-edge", VERSION)
+        .body(Body::from(message))
+        .unwrap_or_else(|_| Response::new(Body::empty()))
+}
+
+fn response_disables_cache(headers: &reqwest::header::HeaderMap) -> bool {
+    if headers.contains_key(reqwest::header::SET_COOKIE) {
+        return true;
+    }
+
+    headers
+        .get(reqwest::header::CACHE_CONTROL)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| {
+            let value = value.to_ascii_lowercase();
+            value.contains("no-store") || value.contains("private") || value.contains("no-cache")
+        })
+        .unwrap_or(false)
+}
+
+fn is_hop_by_hop_request_header(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "host"
+            | "connection"
+            | "content-length"
+            | "transfer-encoding"
+            | "upgrade"
+            | "proxy-connection"
+    )
+}
+
+fn is_hop_by_hop_response_header(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "connection" | "content-length" | "transfer-encoding" | "upgrade" | "proxy-connection"
+    )
+}
+
+fn normalize_health_path(path: &str) -> String {
+    if path.starts_with('/') {
+        path.to_string()
+    } else {
+        format!("/{path}")
+    }
+}
+
+fn load_config(path: &str) -> Result<Config, String> {
+    match std::fs::read_to_string(path) {
+        Ok(contents) => {
+            toml::from_str(&contents).map_err(|e| format!("Invalid config {path}: {e}"))
+        }
+
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Config {
+            server: ServerConfig::default(),
+            proxy: ProxyConfig::default(),
+            cache: CacheConfig::default(),
+        }),
+
+        Err(error) => Err(format!("Unable to read config {path}: {error}")),
+    }
+}
+
+async fn status(config_path: &str) -> Result<(), String> {
+    let config = load_config(config_path)?;
+
+    let host = match config.server.host.as_str() {
+        "0.0.0.0" | "::" => "127.0.0.1",
+        other => other,
+    };
+
+    let url = format!("http://{}:{}/_edge/health", host, config.server.port);
+
+    match reqwest::get(&url).await {
+        Ok(response) if response.status().is_success() => {
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "running".to_string());
+
+            println!("Monceda Edge is running.");
+            println!("{body}");
+            Ok(())
+        }
+
+        Ok(response) => Err(format!(
+            "Monceda Edge responded with HTTP {}",
+            response.status()
+        )),
+
+        Err(_) => Err(format!("Monceda Edge is not reachable at {url}")),
+    }
+}
