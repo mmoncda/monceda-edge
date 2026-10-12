@@ -5,52 +5,50 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
 
-<title>Monceda Edge</title>
+<title>Monceda Edge — Own the edge.</title>
 
 <style>
 :root{
-  --bg:#080a0d;
-  --surface:#0d1014;
-  --surface-2:#101419;
-  --surface-3:#13181e;
+  --bg:#06080b;
+  --surface:#0b0f13;
+  --surface2:#0f141a;
+  --surface3:#141a21;
+  --line:#1d252d;
+  --line2:#2b3641;
 
-  --line:#20262d;
-  --line-soft:#181d22;
+  --text:#f3f6f8;
+  --text2:#b8c2cc;
+  --muted:#6f7b87;
 
-  --text:#f2f4f7;
-  --text-2:#bac2cc;
-  --muted:#737e8a;
+  --cyan:#54caff;
+  --cyan-soft:rgba(84,202,255,.10);
 
-  --accent:#57c8ff;
-  --accent-soft:rgba(87,200,255,.09);
+  --mint:#66dba3;
+  --mint-soft:rgba(102,219,163,.10);
 
-  --green:#63d69a;
-  --green-soft:rgba(99,214,154,.09);
+  --amber:#e4b85f;
+  --amber-soft:rgba(228,184,95,.10);
 
-  --amber:#e4b75e;
-  --amber-soft:rgba(228,183,94,.09);
+  --coral:#ef727b;
+  --coral-soft:rgba(239,114,123,.10);
 
-  --red:#ea737b;
-  --red-soft:rgba(234,115,123,.09);
-
-  --radius:9px;
-
-  --mono:
-    "SFMono-Regular",
-    Consolas,
-    "Liberation Mono",
-    monospace;
+  --mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
 }
 
 *{
   box-sizing:border-box;
 }
 
-html,
-body{
+html,body{
   margin:0;
   min-height:100%;
-  background:var(--bg);
+  background:
+    radial-gradient(
+      circle at 50% -20%,
+      rgba(84,202,255,.055),
+      transparent 42%
+    ),
+    var(--bg);
   color:var(--text);
   font-family:
     Inter,
@@ -61,96 +59,87 @@ body{
     sans-serif;
 }
 
-body{
-  padding:0;
-}
-
 button{
   font:inherit;
 }
 
 .shell{
-  width:min(1440px,100%);
-  margin:0 auto;
+  width:min(1500px,100%);
+  margin:auto;
   padding:0 20px 28px;
 }
 
-/* ─────────────────────────
-   TOP BAR
-───────────────────────── */
+/* TOP BAR */
 
 .topbar{
-  min-height:62px;
+  min-height:66px;
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:18px;
-  border-bottom:1px solid var(--line-soft);
+  gap:20px;
+  border-bottom:1px solid var(--line);
 }
 
 .brand{
   display:flex;
   align-items:center;
-  gap:11px;
-  min-width:0;
+  gap:12px;
 }
 
-.brand-mark{
-  width:31px;
-  height:31px;
+.mark{
+  width:38px;
+  height:38px;
   display:grid;
   place-items:center;
-  border:1px solid #2b3540;
-  border-radius:7px;
-  background:#0f1419;
-  color:var(--accent);
-  font-family:var(--mono);
-  font-size:0;
-  font-weight:800;
-  letter-spacing:0;
+  border:1px solid #2c3944;
+  border-radius:8px;
+  background:#0d1318;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.01);
 }
 
-
 .mark-bars{
+  height:16px;
   display:flex;
   align-items:flex-end;
   gap:2px;
-  height:14px;
 }
 
 .mark-bars i{
   display:block;
   width:3px;
-  border-radius:1px;
-  background:var(--accent);
+  border-radius:2px;
+  background:var(--cyan);
 }
 
 .mark-bars i:nth-child(1){height:7px}
-.mark-bars i:nth-child(2){height:13px}
+.mark-bars i:nth-child(2){height:15px}
 .mark-bars i:nth-child(3){height:10px}
 
 .brand-name{
-  font-size:14px;
+  font-size:16px;
   font-weight:700;
   letter-spacing:-.02em;
 }
 
 .brand-sub{
   margin-top:2px;
-  color:var(--muted);
   font-size:11px;
+  color:var(--muted);
 }
 
-.actions{
+.brand-sub strong{
+  color:var(--cyan);
+  font-weight:600;
+}
+
+.top-actions{
   display:flex;
   align-items:center;
   gap:8px;
-  flex-wrap:wrap;
-  justify-content:flex-end;
 }
 
 .badge{
-  min-height:27px;
+  min-height:31px;
   display:inline-flex;
   align-items:center;
   gap:7px;
@@ -158,279 +147,1430 @@ button{
   border:1px solid var(--line);
   border-radius:6px;
   background:var(--surface);
-  color:var(--text-2);
+  color:var(--text2);
   font-family:var(--mono);
-  font-size:11px;
-  white-space:nowrap;
+  font-size:12px;
 }
 
 .dot{
   width:6px;
   height:6px;
   border-radius:50%;
-  background:var(--muted);
+  background:var(--coral);
 }
 
-.badge.online .dot{
-  background:var(--green);
-  box-shadow:0 0 0 3px rgba(99,214,154,.08);
-}
-
-.badge.offline .dot{
-  background:var(--red);
+.online .dot{
+  background:var(--mint);
+  box-shadow:0 0 0 4px rgba(102,219,163,.07);
 }
 
 .refresh{
-  height:28px;
+  height:29px;
+  padding:0 10px;
   border:1px solid var(--line);
   border-radius:6px;
   background:var(--surface);
-  color:var(--text-2);
-  padding:0 10px;
+  color:var(--text2);
   cursor:pointer;
-  font-size:11px;
+  font-size:12px;
 }
 
 .refresh:hover{
-  border-color:#38434e;
   color:var(--text);
+  border-color:var(--line2);
 }
 
-/* ─────────────────────────
-   CONTEXT
-───────────────────────── */
+/* HERO */
 
-.context{
+.hero{
   display:flex;
-  align-items:flex-end;
   justify-content:space-between;
-  gap:20px;
-  padding:20px 0 16px;
+  align-items:flex-end;
+  gap:22px;
+  padding:22px 0 17px;
 }
 
 .eyebrow{
-  color:var(--accent);
+  color:var(--cyan);
   font-family:var(--mono);
-  font-size:9px;
+  font-size:10px;
   font-weight:800;
-  letter-spacing:.12em;
+  letter-spacing:.14em;
   text-transform:uppercase;
 }
 
-.context h1{
+.hero h1{
   margin:5px 0 0;
-  font-size:22px;
+  font-size:28px;
+  line-height:1;
   font-weight:650;
-  letter-spacing:-.035em;
+  letter-spacing:-.04em;
 }
 
-.context p{
-  margin:6px 0 0;
-  max-width:720px;
+.hero p{
+  margin:8px 0 0;
+  max-width:680px;
   color:var(--muted);
-  font-size:12px;
+  font-size:13px;
   line-height:1.55;
+}
+
+.hero p strong{
+  color:var(--text2);
+  font-weight:600;
 }
 
 .last-check{
   color:var(--muted);
   font-family:var(--mono);
-  font-size:10px;
-  white-space:nowrap;
+  font-size:12px;
 }
 
-/* ─────────────────────────
-   STATUS STRIP
-───────────────────────── */
+/* CONTROL PLANE SHELL */
 
-.status-strip{
+.control-plane{
   display:grid;
-  grid-template-columns:repeat(6,1fr);
-  overflow:hidden;
+  grid-template-columns:190px minmax(0,1fr);
+  min-height:650px;
   border:1px solid var(--line);
-  border-radius:var(--radius);
+  border-radius:11px;
+  overflow:hidden;
   background:var(--surface);
-  margin-bottom:12px;
 }
 
-.metric{
-  min-width:0;
-  padding:12px 14px;
+/* LEFT RAIL */
+
+.rail{
+  background:#080b0f;
   border-right:1px solid var(--line);
+  padding:13px 10px;
 }
 
-.metric:last-child{
-  border-right:0;
-}
-
-.metric-label{
-  color:var(--muted);
+.rail-label{
+  padding:4px 8px 10px;
+  color:#56616c;
   font-size:9px;
   font-weight:800;
-  letter-spacing:.12em;
   text-transform:uppercase;
+  letter-spacing:.12em;
 }
 
-.metric-value{
-  margin-top:5px;
-  font-size:15px;
-  font-weight:650;
-  letter-spacing:-.02em;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-
-.metric-meta{
-  margin-top:3px;
+.rail-btn{
+  width:100%;
+  display:grid;
+  grid-template-columns:22px 1fr;
+  align-items:center;
+  gap:8px;
+  min-height:44px;
+  padding:0 9px;
+  margin-bottom:3px;
+  border:0;
+  border-radius:7px;
+  background:transparent;
   color:var(--muted);
+  cursor:pointer;
+  text-align:left;
+  font-size:12px;
+}
+
+.rail-btn:hover{
+  color:var(--text2);
+  background:#0d1217;
+}
+
+.rail-btn.active{
+  color:var(--text);
+  background:var(--cyan-soft);
+}
+
+.rail-icon{
+  width:24px;
+  color:var(--cyan);
   font-family:var(--mono);
-  font-size:10px;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+  font-size:14px;
+  text-align:center;
 }
 
-/* ─────────────────────────
-   MAIN GRID
-───────────────────────── */
-
-.layout{
-  display:grid;
-  grid-template-columns:minmax(0,1.6fr) minmax(350px,.7fr);
-  gap:12px;
-  align-items:start;
+.rail-footer{
+  margin-top:22px;
+  padding:12px 9px 0;
+  border-top:1px solid var(--line);
+  color:#56616d;
+  font-family:var(--mono);
+  font-size:8px;
+  line-height:1.65;
 }
 
-.stack{
-  display:grid;
-  gap:12px;
-  align-content:start;
+/* WORKSPACE */
+
+.workspace{
+  min-width:0;
+  background:
+    linear-gradient(
+      rgba(255,255,255,.012) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(255,255,255,.012) 1px,
+      transparent 1px
+    );
+  background-size:28px 28px;
 }
 
-.panel{
-  overflow:hidden;
-  border:1px solid var(--line);
-  border-radius:var(--radius);
-  background:var(--surface);
+.view{
+  display:none;
+  min-height:650px;
 }
 
-.panel.primary{
-  border-color:#26313b;
+.view.active{
+  display:block;
 }
 
-.panel-head{
-  min-height:40px;
-  padding:0 14px;
+.view-head{
+  min-height:52px;
+  padding:0 18px;
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:12px;
+  gap:14px;
   border-bottom:1px solid var(--line);
+  background:rgba(8,11,15,.88);
+  backdrop-filter:blur(10px);
+}
+
+.view-title{
+  font-size:12px;
+  font-weight:700;
+}
+
+.view-meta{
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:10px;
+}
+
+/* OVERVIEW TOPOLOGY */
+
+.topology-wrap{
+  padding:24px;
+}
+
+.topology{
+  position:relative;
+  min-height:430px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(84,202,255,.035),
+      transparent 55%
+    ),
+    #080b0f;
+  overflow:hidden;
+}
+
+.node{
+  position:absolute;
+  min-width:150px;
+  padding:12px 14px;
+  border:1px solid var(--line2);
+  border-radius:9px;
+  background:#0c1116;
+  box-shadow:0 10px 40px rgba(0,0,0,.18);
+  transition:
+    transform .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease,
+    background .18s ease;
+}
+
+.node:hover{
+  border-color:rgba(84,202,255,.42);
+  background:#0d1319;
+  box-shadow:
+    0 14px 44px rgba(0,0,0,.24),
+    0 0 0 1px rgba(84,202,255,.04);
+}
+
+.node:not(.primary):hover{
+  transform:translateY(-2px);
+}
+
+.node.internet:hover{
+  transform:translateX(-50%) translateY(-2px);
+}
+
+.node.primary{
+min-width:220px;
+  left:50%;
+  top:45%;
+  transform:translate(-50%,-50%);
+  z-index:8;
+  border-color:rgba(84,202,255,.42);
+  box-shadow:
+    0 0 0 1px rgba(84,202,255,.04),
+    0 0 52px rgba(84,202,255,.06);
+}
+
+
+
+
+
+.node.internet{
+left:50%;
+  top:5%;
+  transform:translateX(-50%);
+}
+
+.node.route-a{
+left:26%;
+  bottom:5%;
+}
+
+.node.route-b{
+right:26%;
+  bottom:5%;
+}
+
+.node.cache-node{
+left:8%;
+  top:31%;
+}
+
+.node.tls-node{
+right:8%;
+  top:31%;
+}
+
+.node-label{
+  color:var(--muted);
+  font-size:8px;
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  font-weight:800;
+}
+
+.node-title{
+  margin-top:5px;
+  font-size:15px;
+  font-weight:700;
+}
+
+.node-meta{
+  margin-top:4px;
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:10px;
+  line-height:1.5;
+}
+
+.node-status{
+  margin-top:9px;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  color:var(--text2);
+  font-family:var(--mono);
+  font-size:10px;
+}
+
+.node-status .signal{
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--muted);
+}
+
+.node-status.good .signal{
+  background:var(--mint);
+}
+
+.node-status.warn .signal{
+  background:var(--amber);
+}
+
+.edge-line{
+  position:absolute;
+  z-index:2;
+  background:rgba(84,202,255,.28);
+  transform-origin:left center;
+  pointer-events:none;
+  overflow:visible;
+}
+
+.edge-line::after{
+  content:"";
+  position:absolute;
+  z-index:5;
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--cyan);
+  box-shadow:
+    0 0 5px rgba(84,202,255,.78),
+    0 0 10px rgba(84,202,255,.28);
+  opacity:.92;
+}
+
+.edge-line.vertical::after{
+  left:-2px;
+  top:0;
+  animation:flowVertical 2.6s linear infinite;
+}
+
+.edge-line.horizontal::after{
+  top:-2px;
+}
+
+.edge-line.horizontal::before{
+  content:"";
+  position:absolute;
+  top:-3px;
+  width:6px;
+  height:6px;
+  border-top:1px solid rgba(84,202,255,.55);
+  border-right:1px solid rgba(84,202,255,.55);
+}
+
+
+
+
+
+.line-tls::before,
+
+
+
+
+/* Left-side paths move toward/from the edge depending on role */
+.line-cache::after{
+left:0;
+  animation:flowHorizontalForward 3s linear infinite;
+  animation-delay:0s;
+}
+
+.line-left::after{
+right:0;
+  left:auto;
+  animation:flowHorizontalReverse 3s linear infinite;
+  animation-delay:-.7s;
+}
+
+
+
+/* Right-side paths move outward from the edge */
+.line-tls::after{
+left:0;
+  animation:flowHorizontalForward 3s linear infinite;
+  animation-delay:-1.35s;
+}
+
+.line-right::after{
+left:0;
+  animation:flowHorizontalForward 3s linear infinite;
+  animation-delay:-2s;
+}
+
+@keyframes flowVertical{
+  0%{
+    top:0;
+    opacity:0;
+  }
+  12%{
+    opacity:1;
+  }
+  88%{
+    opacity:1;
+  }
+  100%{
+    top:calc(100% - 6px);
+    opacity:0;
+  }
+}
+
+@keyframes flowHorizontalForward{
+  0%{
+    left:0;
+    opacity:0;
+  }
+  12%{
+    opacity:1;
+  }
+  88%{
+    opacity:1;
+  }
+  100%{
+    left:calc(100% - 6px);
+    opacity:0;
+  }
+}
+
+@keyframes flowHorizontalReverse{
+  0%{
+    right:0;
+    opacity:0;
+  }
+  12%{
+    opacity:1;
+  }
+  88%{
+    opacity:1;
+  }
+  100%{
+    right:calc(100% - 6px);
+    opacity:0;
+  }
+}
+
+.edge-line.vertical{
+  width:1px;
+}
+
+.edge-line.horizontal{
+  height:1px;
+}
+
+.line-internet{
+left:50%;
+  top:26%;
+  width:1px;
+  height:11%;
+  z-index:3;
+}
+
+.line-internet::after{
+left:-2px;
+  top:0;
+  animation:flowVertical 2.6s linear infinite;
+  animation-delay:-.9s;
+}
+
+.line-left{
+left:36%;
+  top:64%;
+  width:14%;
+  height:1px;
+}
+
+.line-right{
+left:50%;
+  top:64%;
+  width:14%;
+  height:1px;
+}
+
+.line-cache{
+left:21%;
+  top:45%;
+  width:21%;
+  height:1px;
+}
+
+.line-tls{
+left:58%;
+  top:45%;
+  width:21%;
+  height:1px;
+}
+
+
+.pulse{
+  position:absolute;
+  width:5px;
+  height:5px;
+  border-radius:50%;
+  background:var(--cyan);
+  box-shadow:0 0 10px rgba(84,202,255,.7);
+  animation:pulseMove 2.4s linear infinite;
+}
+
+@keyframes pulseMove{
+  0%{opacity:0;transform:translateY(0)}
+  20%{opacity:1}
+  80%{opacity:1}
+  100%{opacity:0;transform:translateY(72px)}
+}
+
+.summary-row{
+  margin-top:12px;
+  display:grid;
+  grid-template-columns:repeat(6,1fr);
+  border:1px solid var(--line);
+  border-radius:9px;
+  overflow:hidden;
+  background:#090c10;
+}
+
+.summary-item{
+  min-width:0;
+  padding:12px 13px;
+  border-right:1px solid var(--line);
+}
+
+.summary-item:last-child{
+  border-right:0;
+}
+
+.summary-label{
+  color:var(--muted);
+  font-size:9px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.1em;
+}
+
+.summary-value{
+  margin-top:5px;
+  font-size:15px;
+  font-weight:650;
+}
+
+.summary-meta{
+  margin-top:3px;
+  color:#606c78;
+  font-family:var(--mono);
+  font-size:8px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+
+.edge-stem{
+position:absolute;
+  z-index:3;
+  left:50%;
+  top:56%;
+  width:1px;
+  height:8%;
+  background:rgba(84,202,255,.32);
+  pointer-events:none;
+}
+
+.edge-stem::after{
+  content:"";
+  position:absolute;
+  left:-2.5px;
+  top:0;
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--cyan);
+  box-shadow:
+    0 0 5px rgba(84,202,255,.78),
+    0 0 10px rgba(84,202,255,.28);
+  animation:stemPacket 2.5s linear infinite;
+}
+
+@keyframes stemPacket{
+  0%{
+    top:0;
+    opacity:0;
+  }
+
+  15%{
+    opacity:1;
+  }
+
+  85%{
+    opacity:1;
+  }
+
+  100%{
+    top:calc(100% - 6px);
+    opacity:0;
+  }
+}
+
+
+
+/* Exact topology directions */
+
+.line-cache::before{
+  content:"";
+  position:absolute;
+  right:-1px;
+  top:-3px;
+  width:6px;
+  height:6px;
+  border-top:1px solid rgba(84,202,255,.65);
+  border-right:1px solid rgba(84,202,255,.65);
+  transform:rotate(45deg);
+}
+
+.line-tls::before{
+  content:"";
+  position:absolute;
+  right:-1px;
+  top:-3px;
+  width:6px;
+  height:6px;
+  border-top:1px solid rgba(84,202,255,.65);
+  border-right:1px solid rgba(84,202,255,.65);
+  transform:rotate(45deg);
+}
+
+
+
+
+
+.line-internet::before{
+  content:"";
+  position:absolute;
+  left:-3px;
+  bottom:-1px;
+  width:6px;
+  height:6px;
+  border-right:1px solid rgba(84,202,255,.65);
+  border-bottom:1px solid rgba(84,202,255,.65);
+  transform:rotate(45deg);
+}
+
+
+
+.route-drop{
+position:absolute;
+  z-index:3;
+  top:64%;
+  width:1px;
+  height:12%;
+  background:rgba(84,202,255,.30);
+  pointer-events:none;
+}
+
+.route-drop-left{
+left:36%;
+}
+
+.route-drop-right{
+right:36%;
+}
+
+.route-drop::after{
+  content:"";
+  position:absolute;
+  left:-2.5px;
+  top:0;
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--cyan);
+  box-shadow:
+    0 0 5px rgba(84,202,255,.75),
+    0 0 10px rgba(84,202,255,.25);
+  animation:routeDropPacket 2.8s linear infinite;
+}
+
+.route-drop-right::after{
+  animation-delay:-1.4s;
+}
+
+@keyframes routeDropPacket{
+  0%{
+    top:0;
+    opacity:0;
+  }
+  15%{
+    opacity:1;
+  }
+  85%{
+    opacity:1;
+  }
+  100%{
+    top:calc(100% - 6px);
+    opacity:0;
+  }
+}
+
+
+
+.route-drop::before{
+  content:"";
+  position:absolute;
+  left:-3px;
+  bottom:-1px;
+  width:6px;
+  height:6px;
+  border-right:1px solid rgba(84,202,255,.62);
+  border-bottom:1px solid rgba(84,202,255,.62);
+  transform:rotate(45deg);
+}
+
+
+
+/* ─────────────────────────
+   TOPOLOGY V2 — GRID + SVG
+───────────────────────── */
+
+.topology-v2{
+  position:relative;
+  min-height:520px;
+  overflow:hidden;
+}
+
+.topology-svg{
+  position:absolute;
+  inset:0;
+  z-index:1;
+  width:100%;
+  height:100%;
+  pointer-events:none;
+}
+
+.topology-path{
+  fill:none;
+  stroke:rgba(84,202,255,.34);
+  stroke-width:1.2;
+  vector-effect:non-scaling-stroke;
+}
+
+.topology-arrow{
+  fill:rgba(84,202,255,.58);
+}
+
+.packet{
+  fill:var(--cyan);
+  filter:
+    drop-shadow(0 0 3px rgba(84,202,255,.82))
+    drop-shadow(0 0 7px rgba(84,202,255,.28));
+}
+
+.topology-grid{
+  position:absolute;
+  inset:0;
+  z-index:2;
+
+  display:grid;
+
+  grid-template-columns:
+    minmax(180px,1fr)
+    minmax(260px,1.1fr)
+    minmax(180px,1fr);
+
+  grid-template-rows:
+    135px
+    200px
+    185px;
+
+  grid-template-areas:
+    ". internet ."
+    "cache edge tls"
+    "routeA . routeB";
+
+  align-items:center;
+  justify-items:center;
+
+  padding:
+    10px
+    clamp(24px,6vw,90px)
+    16px;
+}
+
+.topology-v2 .node{
+  position:relative !important;
+
+  left:auto !important;
+  right:auto !important;
+  top:auto !important;
+  bottom:auto !important;
+
+  transform:none !important;
+
+  min-width:0;
+  width:min(100%,230px);
+
+  z-index:3;
+}
+
+.topology-v2 .node.internet{
+  grid-area:internet;
+}
+
+.topology-v2 .node.cache-node{
+  grid-area:cache;
+}
+
+.topology-v2 .node.primary{
+  grid-area:edge;
+
+  width:min(100%,260px);
+
+  border-color:rgba(84,202,255,.45);
+
+  box-shadow:
+    0 0 0 1px rgba(84,202,255,.04),
+    0 0 42px rgba(84,202,255,.055);
+}
+
+.topology-v2 .node.tls-node{
+  grid-area:tls;
+}
+
+.topology-v2 .node.route-a{
+  grid-area:routeA;
+}
+
+.topology-v2 .node.route-b{
+  grid-area:routeB;
+}
+
+.topology-v2 .node:hover{
+  transform:translateY(-2px) !important;
+}
+
+.topology-v2 .node.primary:hover{
+  transform:none !important;
+}
+
+@media(max-width:900px){
+
+  .topology-v2{
+    min-height:760px;
+  }
+
+  .topology-svg{
+    display:none;
+  }
+
+  .topology-grid{
+    position:relative;
+
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+
+    padding:20px;
+  }
+
+  .topology-v2 .node{
+    width:min(100%,420px);
+  }
+}
+
+
+
+
+/* ─────────────────────────
+   EDGE CORE OVERVIEW
+───────────────────────── */
+
+.edge-core-stage{
+position:relative;
+  min-height:480px;
+  padding:54px 90px 30px;
+
+  display:grid;
+
+  grid-template-columns:
+    minmax(190px,.9fr)
+    minmax(300px,1.2fr)
+    minmax(190px,.9fr);
+
+  grid-template-rows:
+    64px
+    220px
+    42px
+    110px;
+
+  grid-template-areas:
+    ". boundary ."
+    "cache core tls"
+    ". lane ."
+    "routes routes routes";
+
+  gap:0 22px;
+
+  background:
+    radial-gradient(
+      circle at 50% 39%,
+      rgba(84,202,255,.05),
+      transparent 25%
+    );
+}
+
+.core-side{
+  align-self:center;
+  min-width:0;
+}
+
+.core-cache{
+grid-area:cache;
+  text-align:right;
+  transform:translateX(18px);
+}
+
+.core-tls{
+grid-area:tls;
+  transform:translateX(-18px);
+}
+
+.core-side-kicker,
+.boundary-kicker{
+  color:var(--muted);
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.13em;
+}
+
+.core-side-value{
+margin-top:7px;
+  font-size:18px;
+  font-weight:700;
+  letter-spacing:-.025em;
+}
+
+.core-side-meta{
+  margin-top:5px;
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:10px;
+}
+
+.core-state{
+  margin-top:10px;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  font-family:var(--mono);
+  font-size:10px;
+}
+
+.core-cache .core-state{
+  justify-content:flex-end;
+}
+
+.core-state .signal,
+.core-health .signal{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:currentColor;
+}
+
+.edge-core{
+  grid-area:core;
+  position:relative;
+
+  display:grid;
+  place-items:center;
+
+  min-width:0;
+}
+
+.core-panel{
+position:relative;
+  z-index:4;
+
+  width:min(100%,275px);
+  min-height:148px;
+
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+
+  padding:21px 23px;
+
+  border:1px solid rgba(84,202,255,.42);
+  border-radius:13px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(84,202,255,.032),
+      transparent 48%
+    ),
+    #0b1015;
+
+  box-shadow:
+    0 20px 58px rgba(0,0,0,.27),
+    0 0 38px rgba(84,202,255,.04);
+}
+
+.core-eyebrow{
+  color:var(--cyan);
+  font-family:var(--mono);
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.13em;
+}
+
+.core-title{
+margin-top:9px;
+  font-size:23px;
+  line-height:1;
+  font-weight:720;
+  letter-spacing:-.04em;
+}
+
+.core-meta{
+  margin-top:9px;
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:11px;
+}
+
+.core-health{
+  margin-top:17px;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+
+  color:var(--mint);
+  font-family:var(--mono);
+  font-size:11px;
+}
+
+.core-orbit{
+  position:absolute;
+  left:50%;
+  top:50%;
+
+  border:1px solid rgba(84,202,255,.09);
+  border-radius:50%;
+
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+}
+
+.core-orbit-a{
+width:330px;
+  height:198px;
+}
+
+.core-orbit-b{
+width:390px;
+  height:245px;
+  border-style:dashed;
+  opacity:.48;
+}
+
+.core-boundary{
+grid-area:boundary;
+  align-self:start;
+
+  width:min(100%,300px);
+  justify-self:center;
+
+  transform:translateY(10px);
+}
+
+.boundary-kicker{
+  text-align:center;
+}
+
+.boundary-main{
+  margin-top:7px;
+
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:18px;
+}
+
+.boundary-main > div:first-child{
+  text-align:right;
+}
+
+.boundary-main strong{
+  display:block;
+  font-size:15px;
+}
+
+.boundary-main span{
+  display:block;
+  margin-top:3px;
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:9px;
+}
+
+.boundary-main .core-state{
+  margin-top:0;
+}
+
+.proxy-lane{
+grid-area:lane;
+  align-self:center;
+
+  width:min(100%,520px);
+  justify-self:center;
+
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.lane-label{
+  color:var(--cyan);
+  font-family:var(--mono);
+  font-size:8px;
+  font-weight:800;
+  letter-spacing:.13em;
+  white-space:nowrap;
+}
+
+.lane-rule{
+height:1px;
+  flex:1;
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84,202,255,.48),
+      rgba(84,202,255,.10)
+    );
+}
+
+.route-dock{
+  grid-area:routes;
+
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+
+  align-self:end;
+}
+
+.route-port{
+  min-width:0;
+  padding:13px 15px;
+
+  border:1px solid var(--line);
+  border-radius:8px;
+
+  background:#090d11;
+
+  transition:
+    border-color .16s ease,
+    background .16s ease;
+}
+
+.route-port:hover{
+  border-color:rgba(84,202,255,.32);
+  background:#0b1015;
+}
+
+.route-port-head{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+
+  color:var(--muted);
+  font-size:8px;
+  font-weight:800;
+  letter-spacing:.1em;
+}
+
+.route-live{
+  color:var(--mint);
+}
+
+.route-port-title{
+  margin-top:8px;
+
+  font-size:15px;
+  font-weight:700;
+  letter-spacing:-.02em;
+}
+
+.route-port-meta{
+  margin-top:4px;
+
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:10px;
+
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.edge-core-summary{
+  margin:
+    0
+    26px
+    22px;
+}
+
+@media(max-width:1000px){
+
+  .edge-core-stage{
+    padding:30px 24px;
+
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:auto;
+    grid-template-areas:
+      "boundary boundary"
+      "core core"
+      "cache tls"
+      "lane lane"
+      "routes routes";
+
+    gap:22px;
+  }
+
+  .core-cache{
+    text-align:left;
+  }
+
+  .core-cache .core-state{
+    justify-content:flex-start;
+  }
+
+  .route-dock{
+    grid-template-columns:1fr;
+  }
+}
+
+@media(max-width:650px){
+
+  .edge-core-stage{
+    grid-template-columns:1fr;
+    grid-template-areas:
+      "boundary"
+      "core"
+      "cache"
+      "tls"
+      "lane"
+      "routes";
+  }
+
+  .core-orbit{
+    display:none;
+  }
+
+  .edge-core-summary{
+    margin:
+      0
+      14px
+      16px;
+  }
+}
+
+
+
+/* TRAFFIC */
+
+.traffic-grid{
+  display:grid;
+  grid-template-columns:1.15fr .85fr;
+  gap:12px;
+  padding:18px;
+}
+
+.panel{
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:#090c10;
+  overflow:hidden;
+}
+
+.panel-head{
+  min-height:42px;
+  padding:0 13px;
+  border-bottom:1px solid var(--line);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
 }
 
 .panel-title{
   font-size:12px;
   font-weight:700;
-  letter-spacing:.005em;
 }
 
 .panel-meta{
   color:var(--muted);
   font-family:var(--mono);
-  font-size:10px;
+  font-size:9px;
 }
 
-/* ─────────────────────────
-   ROWS
-───────────────────────── */
-
-.rows{
-  display:grid;
+.route-path{
+position:relative;
+  padding:20px 20px 28px 46px;
 }
 
-.row{
-  min-height:38px;
-  display:grid;
-  grid-template-columns:180px minmax(0,1fr) auto;
-  gap:14px;
-  align-items:center;
-  padding:7px 14px;
-  border-bottom:1px solid var(--line-soft);
+.route-path::before{
+content:"";
+  position:absolute;
+  left:28px;
+  top:46px;
+  bottom:58px;
+  width:1px;
+  background:linear-gradient(
+    to bottom,
+    rgba(84,202,255,.42),
+    rgba(84,202,255,.18)
+  );
 }
 
-.row:last-child{
-  border-bottom:0;
-}
-
-.row-key{
-  color:var(--muted);
-  font-size:12px;
-}
-
-.row-value{
-  min-width:0;
-  color:var(--text-2);
-  font-family:var(--mono);
-  font-size:10px;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-
-.row-state{
-  justify-self:end;
-}
-
-/* ─────────────────────────
-   CHIPS
-───────────────────────── */
-
-.chip{
-  min-height:20px;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  padding:0 7px;
+.path-step{
+position:relative;
+  padding:13px 15px 13px 18px;
   border:1px solid var(--line);
-  border-radius:5px;
-  background:var(--surface-2);
+  border-radius:7px;
+  background:#0c1116;
+  margin-bottom:24px;
+  transition:border-color .18s ease, transform .18s ease;
+}
+
+.path-step:hover{
+  border-color:rgba(84,202,255,.35);
+  transform:translateX(2px);
+}
+
+.path-step::before{
+content:"";
+  position:absolute;
+  left:-22px;
+  top:50%;
+  width:8px;
+  height:8px;
+  transform:translateY(-50%);
+  border-radius:50%;
+  background:var(--cyan);
+  box-shadow:
+    0 0 5px rgba(84,202,255,.72),
+    0 0 10px rgba(84,202,255,.22);
+}
+
+
+.route-path::after{
+  content:"";
+  position:absolute;
+  left:25px;
+  bottom:55px;
+  width:7px;
+  height:1px;
+  background:rgba(84,202,255,.38);
+}
+
+.path-step:first-child::after{
+  content:"";
+  position:absolute;
+  left:-25px;
+  top:50%;
+  width:7px;
+  height:1px;
+  background:rgba(84,202,255,.38);
+}
+
+
+.path-step:last-child{
+  margin-bottom:0;
+}
+
+.path-title{
+  font-size:12px;
+  font-weight:700;
+}
+
+.path-meta{
+  margin-top:3px;
   color:var(--muted);
   font-family:var(--mono);
-  font-size:8px;
-  white-space:nowrap;
-}
-
-.chip.good{
-  color:var(--green);
-  border-color:rgba(99,214,154,.24);
-  background:var(--green-soft);
-}
-
-.chip.warn{
-  color:var(--amber);
-  border-color:rgba(228,183,94,.24);
-  background:var(--amber-soft);
-}
-
-.chip.bad{
-  color:var(--red);
-  border-color:rgba(234,115,123,.24);
-  background:var(--red-soft);
-}
-
-.chip.info{
-  color:var(--accent);
-  border-color:rgba(87,200,255,.24);
-  background:var(--accent-soft);
-}
-
-/* ─────────────────────────
-   TABLE
-───────────────────────── */
-
-.table-wrap{
-  overflow:auto;
+  font-size:10px;
 }
 
 table{
@@ -438,315 +1578,383 @@ table{
   border-collapse:collapse;
 }
 
-th,
-td{
+th,td{
+  padding:10px 12px;
   text-align:left;
-  border-bottom:1px solid var(--line-soft);
-  padding:9px 13px;
-}
-
-th{
-  background:#0a0d11;
-  color:var(--muted);
-  font-size:8px;
-  font-weight:800;
-  letter-spacing:.1em;
-  text-transform:uppercase;
-}
-
-td{
-  color:var(--text-2);
-  font-size:11px;
-}
-
-td.mono{
-  font-family:var(--mono);
-}
-
-tr:last-child td{
-  border-bottom:0;
-}
-
-/* ─────────────────────────
-   READINESS
-───────────────────────── */
-
-.readiness-summary{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
   border-bottom:1px solid var(--line);
 }
 
-.readiness-stat{
-  padding:12px 13px;
-  border-right:1px solid var(--line);
-}
-
-.readiness-stat:last-child{
-  border-right:0;
-}
-
-.readiness-stat span{
-  display:block;
-}
-
-.readiness-stat .name{
+th{
   color:var(--muted);
-  font-size:8px;
-  font-weight:800;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-}
-
-.readiness-stat .score{
-  margin-top:5px;
-  font-family:var(--mono);
-  font-size:16px;
-  font-weight:700;
-}
-
-.readiness-meter{
-  height:3px;
-  margin-top:8px;
-  background:#171c22;
-  border-radius:99px;
-  overflow:hidden;
-}
-
-.readiness-meter > span{
-  display:block;
-  width:0;
-  height:100%;
-  background:var(--accent);
-  border-radius:inherit;
-  transition:width .25s ease;
-}
-
-.check-group{
-  padding:3px 0;
-}
-
-.group-title{
-  min-height:28px;
-  display:flex;
-  align-items:center;
-  padding:0 13px;
-  color:var(--muted);
-  font-size:8px;
-  font-weight:800;
+  background:#080b0f;
+  font-size:9px;
   letter-spacing:.1em;
   text-transform:uppercase;
-  border-bottom:1px solid var(--line-soft);
 }
 
-.check{
-  min-height:35px;
-  display:grid;
-  grid-template-columns:16px 1fr auto;
-  gap:9px;
+td{
+  color:var(--text2);
+  font-size:12px;
+}
+
+.mono{
+  font-family:var(--mono);
+}
+
+.chip{
+  min-height:20px;
+  display:inline-flex;
   align-items:center;
-  padding:6px 13px;
-  border-bottom:1px solid var(--line-soft);
+  padding:0 7px;
+  border:1px solid var(--line);
+  border-radius:5px;
+  font-family:var(--mono);
+  font-size:9px;
 }
 
-.check:last-child{
-  border-bottom:0;
+.good{
+  color:var(--mint)!important;
 }
 
-.check-icon{
-  width:15px;
-  height:15px;
+.warn{
+  color:var(--amber)!important;
+}
+
+.bad{
+  color:var(--coral)!important;
+}
+
+/* NETWORK */
+
+.network-canvas{
+  padding:28px;
+}
+
+.network-line{
+  position:relative;
+  max-width:780px;
+  margin:auto;
+}
+
+.network-line::before{
+  content:"";
+  position:absolute;
+  left:16px;
+  top:31px;
+  bottom:31px;
+  width:1px;
+  background:linear-gradient(
+    to bottom,
+    rgba(84,202,255,.36),
+    rgba(84,202,255,.09)
+  );
+}
+
+.network-step{
+  display:grid;
+  grid-template-columns:44px 1fr auto;
+  gap:12px;
+  align-items:center;
+  min-height:62px;
+  border-bottom:1px solid var(--line);
+}
+
+.network-icon{
+  position:relative;
+  z-index:1;
+  width:38px;
+  height:38px;
   display:grid;
   place-items:center;
   border:1px solid var(--line);
-  border-radius:4px;
+  border-radius:7px;
+  background:#0b1015;
+  color:var(--cyan);
   font-family:var(--mono);
-  font-size:8px;
-}
-
-.check-icon.good{
-  color:var(--green);
-  border-color:rgba(99,214,154,.25);
-  background:var(--green-soft);
-}
-
-.check-icon.bad{
-  color:var(--red);
-  border-color:rgba(234,115,123,.25);
-  background:var(--red-soft);
-}
-
-.check-icon.warn{
-  color:var(--amber);
-  border-color:rgba(228,183,94,.25);
-  background:var(--amber-soft);
-}
-
-.check-label{
-  color:var(--text-2);
-  font-size:11px;
-}
-
-.check-sub{
-  margin-top:2px;
-  color:var(--muted);
-  font-family:var(--mono);
-  font-size:9px;
-}
-
-/* ─────────────────────────
-   DIAGNOSTICS
-───────────────────────── */
-
-details{
-  border:1px solid var(--line);
-  border-radius:var(--radius);
-  background:var(--surface);
-  overflow:hidden;
-}
-
-summary{
-  min-height:39px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:0 14px;
-  cursor:pointer;
-  list-style:none;
   font-size:10px;
+  box-shadow:0 0 0 4px #080b0f;
+}
+
+.network-name{
+  font-size:12px;
   font-weight:700;
 }
 
-summary::-webkit-details-marker{
-  display:none;
-}
-
-summary::after{
-  content:"+";
+.network-meta{
+  margin-top:3px;
   color:var(--muted);
   font-family:var(--mono);
-  font-size:13px;
+  font-size:10px;
 }
 
-details[open] summary::after{
-  content:"−";
+/* CERTIFICATE PIPELINE */
+
+.cert-wrap{
+  padding:26px;
 }
 
-.codebox{
-  margin:0;
+.cert-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 320px;
+  gap:28px;
+  max-width:980px;
+  margin:auto;
+}
+
+.pipeline{
+  max-width:660px;
+}
+
+.cert-summary{
+  align-self:start;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:#090c10;
+  overflow:hidden;
+}
+
+.cert-summary-head{
   padding:12px 14px;
-  border-top:1px solid var(--line);
-  background:#070a0d;
-  color:#98a4af;
+  border-bottom:1px solid var(--line);
+  font-size:12px;
+  font-weight:700;
+}
+
+.cert-summary-row{
+  min-height:43px;
+  display:grid;
+  grid-template-columns:120px 1fr;
+  gap:12px;
+  align-items:center;
+  padding:8px 14px;
+  border-bottom:1px solid var(--line);
+}
+
+.cert-summary-row:last-child{
+  border-bottom:0;
+}
+
+.cert-summary-key{
+  color:var(--muted);
+  font-size:12px;
+}
+
+.cert-summary-value{
+  color:var(--text2);
   font-family:var(--mono);
   font-size:9px;
-  line-height:1.65;
-  white-space:pre-wrap;
   overflow-wrap:anywhere;
-  max-height:320px;
+}
+
+.pipe-step{
+  position:relative;
+  display:grid;
+  grid-template-columns:22px 1fr auto;
+  gap:12px;
+  align-items:start;
+  min-height:62px;
+}
+
+.pipe-step:not(:last-child)::before{
+  content:"";
+  position:absolute;
+  left:7px;
+  top:20px;
+  width:1px;
+  height:42px;
+  background:var(--line2);
+}
+
+.pipe-dot{
+  width:18px;
+  height:18px;
+  margin-top:2px;
+  border-radius:50%;
+  border:1px solid var(--line2);
+  background:#0c1116;
+}
+
+.pipe-dot.good{
+  border-color:rgba(102,219,163,.45);
+  background:var(--mint-soft);
+  box-shadow:inset 0 0 0 4px #0c1116;
+}
+
+.pipe-dot.warn{
+  border-color:rgba(228,184,95,.45);
+  background:var(--amber-soft);
+  box-shadow:inset 0 0 0 4px #0c1116;
+}
+
+.pipe-name{
+  font-size:12px;
+  font-weight:700;
+}
+
+.pipe-meta{
+  margin-top:3px;
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:10px;
+}
+
+/* INSPECTOR */
+
+.inspector{
+  display:grid;
+  grid-template-columns:280px 1fr;
+  min-height:598px;
+}
+
+.inspect-list{
+  border-right:1px solid var(--line);
+  background:#080b0f;
+}
+
+.inspect-item{
+  width:100%;
+  min-height:54px;
+  padding:7px 12px;
+  border:0;
+  border-bottom:1px solid var(--line);
+  background:transparent;
+  color:var(--text2);
+  cursor:pointer;
+  text-align:left;
+}
+
+.inspect-item:hover,
+.inspect-item.active{
+  background:#0d1217;
+}
+
+.inspect-path{
+  font-family:var(--mono);
+  font-size:10px;
+}
+
+.inspect-meta{
+  margin-top:4px;
+  display:flex;
+  justify-content:space-between;
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:9px;
+}
+
+.inspect-code{
+  margin:0;
+  padding:18px;
+  background:#07090c;
+  color:#9ba7b2;
+  font-family:var(--mono);
+  font-size:10px;
+  line-height:1.65;
   overflow:auto;
 }
 
-/* ─────────────────────────
-   FOOTER
-───────────────────────── */
+/* FOOTER */
 
 .footer{
-  margin-top:16px;
-  padding:11px 2px 0;
-  border-top:1px solid var(--line-soft);
   display:flex;
   justify-content:space-between;
   gap:20px;
-  color:#65707c;
+  margin-top:14px;
+  padding-top:12px;
+  border-top:1px solid var(--line);
+  color:#5f6b77;
   font-family:var(--mono);
   font-size:9px;
 }
 
-/* ─────────────────────────
-   COLORS
-───────────────────────── */
+@media(max-width:1000px){
+  .control-plane{
+    grid-template-columns:1fr;
+  }
 
-.green{color:var(--green)}
-.red{color:var(--red)}
-.amber{color:var(--amber)}
-.accent{color:var(--accent)}
+  .rail{
+    border-right:0;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    gap:4px;
+    overflow:auto;
+  }
 
-/* ─────────────────────────
-   RESPONSIVE
-───────────────────────── */
+  .rail-label,
+  .rail-footer{
+    display:none;
+  }
 
-@media(max-width:1100px){
+  .rail-btn{
+    width:auto;
+    min-width:110px;
+  }
 
-  .status-strip{
+  .summary-row{
     grid-template-columns:repeat(3,1fr);
   }
 
-  .metric:nth-child(3){
-    border-right:0;
-  }
-
-  .metric:nth-child(-n+3){
-    border-bottom:1px solid var(--line);
-  }
-
-  .layout{
+  .traffic-grid{
     grid-template-columns:1fr;
+  }
+
+  .cert-grid{
+    grid-template-columns:1fr;
+  }
+
+  .inspector{
+    grid-template-columns:1fr;
+  }
+
+  .inspect-list{
+    border-right:0;
+    border-bottom:1px solid var(--line);
   }
 }
 
 @media(max-width:700px){
-
   .shell{
     padding:0 12px 22px;
   }
 
-  .topbar{
-    padding:10px 0;
+  .hero{
     align-items:flex-start;
-  }
-
-  .context{
     flex-direction:column;
-    align-items:flex-start;
   }
 
-  .status-strip{
+  .top-actions{
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+
+  .summary-row{
     grid-template-columns:repeat(2,1fr);
   }
 
-  .metric:nth-child(2n){
-    border-right:0;
+  .topology{
+    min-height:620px;
   }
 
-  .metric:nth-child(-n+4){
-    border-bottom:1px solid var(--line);
+  .node.internet,
+  .node.primary,
+  .node.cache-node,
+  .node.tls-node,
+  .node.route-a,
+  .node.route-b{
+    left:50%;
+    right:auto;
+    transform:translateX(-50%);
   }
 
-  .row{
-    grid-template-columns:120px minmax(0,1fr);
-  }
+  .node.internet{top:7%}
+  .node.cache-node{top:22%}
+  .node.primary{top:43%}
+  .node.tls-node{top:61%}
+  .node.route-a{top:78%;bottom:auto}
+  .node.route-b{top:89%;bottom:auto}
 
-  .row-state{
-    grid-column:2;
-    justify-self:start;
-  }
-
-  .readiness-summary{
-    grid-template-columns:1fr;
-  }
-
-  .readiness-stat{
-    border-right:0;
-    border-bottom:1px solid var(--line);
-  }
-
-  .readiness-stat:last-child{
-    border-bottom:0;
-  }
-
-  .footer{
-    flex-direction:column;
+  .edge-line{
+    display:none;
   }
 }
 </style>
@@ -759,7 +1967,7 @@ details[open] summary::after{
 <header class="topbar">
 
   <div class="brand">
-    <div class="brand-mark" aria-label="Monceda Edge">
+    <div class="mark">
       <span class="mark-bars">
         <i></i><i></i><i></i>
       </span>
@@ -767,24 +1975,23 @@ details[open] summary::after{
 
     <div>
       <div class="brand-name">Monceda Edge</div>
-      <div class="brand-sub">portable edge runtime</div>
+      <div class="brand-sub">
+        <strong>Own the edge.</strong>
+        Portable infrastructure.
+      </div>
     </div>
   </div>
 
-  <div class="actions">
+  <div class="top-actions">
 
-    <div id="runtimeBadge" class="badge offline">
+    <div id="runtimeBadge" class="badge">
       <span class="dot"></span>
       <span id="runtimeBadgeText">offline</span>
     </div>
 
-    <div id="nodeBadge" class="badge">
-      node: local
-    </div>
+    <div class="badge">node: local</div>
 
-    <div id="versionBadge" class="badge">
-      v—
-    </div>
+    <div id="versionBadge" class="badge">v—</div>
 
     <button id="refreshBtn" class="refresh">
       Refresh
@@ -795,23 +2002,20 @@ details[open] summary::after{
 </header>
 
 
-<section class="context">
+<section class="hero">
 
   <div>
-
     <div class="eyebrow">
-      Operator Console
+      Monceda Edge Control Plane
     </div>
 
-    <h1>
-      Edge control center
-    </h1>
+    <h1>See every route. Control every boundary.</h1>
 
     <p>
-      Runtime, routes, TLS, certificate automation,
-      public-node readiness and network preflight.
+      <strong>Your node. Your traffic. Your control.</strong>
+      A live view of runtime state, traffic paths,
+      network reachability and certificate readiness.
     </p>
-
   </div>
 
   <div id="lastCheck" class="last-check">
@@ -821,338 +2025,458 @@ details[open] summary::after{
 </section>
 
 
-<section class="status-strip">
+<section class="control-plane">
 
-  <div class="metric">
-    <div class="metric-label">Runtime</div>
-    <div id="runtimeMetric" class="metric-value red">
-      Offline
-    </div>
-    <div class="metric-meta">
-      edge process
-    </div>
-  </div>
+  <aside class="rail">
 
-  <div class="metric">
-    <div class="metric-label">Upstream</div>
-    <div id="upstreamMetric" class="metric-value">
-      —
-    </div>
-    <div id="upstreamMeta" class="metric-meta">
-      reverse proxy
-    </div>
-  </div>
+    <div class="rail-label">Control Plane</div>
 
-  <div class="metric">
-    <div class="metric-label">Cache</div>
-    <div id="cacheMetric" class="metric-value">
-      —
-    </div>
-    <div id="cacheMeta" class="metric-meta">
-      —
-    </div>
-  </div>
+    <button class="rail-btn active" data-view="overview">
+      <span class="rail-icon">◉</span>
+      <span>Overview</span>
+    </button>
 
-  <div class="metric">
-    <div class="metric-label">TLS</div>
-    <div id="tlsMetric" class="metric-value">
-      —
-    </div>
-    <div id="tlsMeta" class="metric-meta">
-      certificate
-    </div>
-  </div>
+    <button class="rail-btn" data-view="traffic">
+      <span class="rail-icon">→</span>
+      <span>Traffic</span>
+    </button>
 
-  <div class="metric">
-    <div class="metric-label">ACME</div>
-    <div id="acmeMetric" class="metric-value">
-      —
-    </div>
-    <div id="acmeMeta" class="metric-meta">
-      certificate automation
-    </div>
-  </div>
+    <button class="rail-btn" data-view="network">
+      <span class="rail-icon">⌁</span>
+      <span>Network</span>
+    </button>
 
-  <div class="metric">
-    <div class="metric-label">Public Node</div>
-    <div id="publicMetric" class="metric-value">
-      —
+    <button class="rail-btn" data-view="certificates">
+      <span class="rail-icon">◇</span>
+      <span>Certificates</span>
+    </button>
+
+    <button class="rail-btn" data-view="inspector">
+      <span class="rail-icon">⌘</span>
+      <span>Inspector</span>
+    </button>
+
+    <div class="rail-footer">
+      control plane v6<br>
+      local operator profile
     </div>
-    <div id="publicMeta" class="metric-meta">
-      network state
-    </div>
-  </div>
+
+  </aside>
+
+
+  <main class="workspace">
+
+    <!-- OVERVIEW -->
+
+    <section id="view-overview" class="view active">
+
+      <div class="view-head">
+        <div class="view-title">Edge Core</div>
+        <div class="view-meta">local operator profile</div>
+      </div>
+
+      <div class="edge-core-stage">
+
+        <div class="core-side core-cache">
+          <div class="core-side-kicker">CACHE</div>
+          <div id="cacheNodeTitle" class="core-side-value">—</div>
+          <div id="cacheNodeMeta" class="core-side-meta">—</div>
+
+          <div id="cacheNodeStatus" class="core-state good">
+            <span class="signal"></span>
+            <span>active</span>
+          </div>
+        </div>
+
+
+        <div class="core-side core-tls">
+          <div class="core-side-kicker">TLS / ACME</div>
+          <div id="tlsNodeTitle" class="core-side-value">—</div>
+          <div id="tlsNodeMeta" class="core-side-meta">—</div>
+
+          <div id="tlsNodeStatus" class="core-state warn">
+            <span class="signal"></span>
+            <span>guarded</span>
+          </div>
+        </div>
+
+
+        <div class="edge-core">
+
+          <div class="core-orbit core-orbit-a"></div>
+          <div class="core-orbit core-orbit-b"></div>
+
+          <div class="core-panel">
+
+            <div class="core-eyebrow">
+              MONCEDA EDGE CORE
+            </div>
+
+            <div class="core-title">
+              Monceda Edge
+            </div>
+
+            <div id="edgeNodeMeta" class="core-meta">
+              v— • —
+            </div>
+
+            <div id="edgeNodeStatus" class="core-health">
+              <span class="signal"></span>
+              <span>offline</span>
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div class="core-boundary">
+
+          <div class="boundary-kicker">
+            EXTERNAL BOUNDARY
+          </div>
+
+          <div class="boundary-main">
+            <div>
+              <strong>Internet</strong>
+              <span id="internetMeta">no public domain</span>
+            </div>
+
+            <div id="internetStatus" class="core-state warn">
+              <span class="signal"></span>
+              <span>local only</span>
+            </div>
+          </div>
+
+        </div>
+
+
+        <div class="proxy-lane">
+
+          <div class="lane-label">
+            REVERSE PROXY
+          </div>
+
+          <div class="lane-rule"></div>
+
+        </div>
+
+
+        <div class="route-dock">
+
+          <div class="route-port">
+
+            <div class="route-port-head">
+              <span>ROUTE 01</span>
+              <span class="route-live">● ACTIVE</span>
+            </div>
+
+            <div id="routeATitle" class="route-port-title">
+              dashboard.local
+            </div>
+
+            <div id="routeAMeta" class="route-port-meta">
+              —
+            </div>
+
+          </div>
+
+
+          <div class="route-port">
+
+            <div class="route-port-head">
+              <span>ROUTE 02</span>
+              <span class="route-live">● ACTIVE</span>
+            </div>
+
+            <div id="routeBTitle" class="route-port-title">
+              app.local
+            </div>
+
+            <div id="routeBMeta" class="route-port-meta">
+              —
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="summary-row edge-core-summary">
+
+        <div class="summary-item">
+          <div class="summary-label">Runtime</div>
+          <div id="sumRuntime" class="summary-value">—</div>
+          <div class="summary-meta">edge process</div>
+        </div>
+
+        <div class="summary-item">
+          <div class="summary-label">Routes</div>
+          <div id="sumRoutes" class="summary-value">—</div>
+          <div class="summary-meta">configured</div>
+        </div>
+
+        <div class="summary-item">
+          <div class="summary-label">Cache</div>
+          <div id="sumCache" class="summary-value">—</div>
+          <div id="sumCacheMeta" class="summary-meta">—</div>
+        </div>
+
+        <div class="summary-item">
+          <div class="summary-label">TLS</div>
+          <div id="sumTls" class="summary-value">—</div>
+          <div id="sumTlsMeta" class="summary-meta">—</div>
+        </div>
+
+        <div class="summary-item">
+          <div class="summary-label">ACME</div>
+          <div id="sumAcme" class="summary-value">—</div>
+          <div id="sumAcmeMeta" class="summary-meta">—</div>
+        </div>
+
+        <div class="summary-item">
+          <div class="summary-label">Public Node</div>
+          <div id="sumPublic" class="summary-value">—</div>
+          <div id="sumPublicMeta" class="summary-meta">—</div>
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- TRAFFIC -->
+
+    <section id="view-traffic" class="view">
+
+      <div class="view-head">
+        <div class="view-title">Traffic Map</div>
+        <div class="view-meta">routing plane</div>
+      </div>
+
+      <div class="traffic-grid">
+
+        <div class="panel">
+
+          <div class="panel-head">
+            <div class="panel-title">Default Traffic Path</div>
+            <div class="panel-meta">live route</div>
+          </div>
+
+          <div class="route-path">
+
+            <div class="path-step">
+              <div class="path-title">Incoming request</div>
+              <div class="path-meta">edge listener</div>
+            </div>
+
+            <div class="path-step">
+              <div class="path-title">Monceda Edge</div>
+              <div id="trafficEdgeMeta" class="path-meta">—</div>
+            </div>
+
+            <div class="path-step">
+              <div class="path-title">Cache decision</div>
+              <div id="trafficCacheMeta" class="path-meta">—</div>
+            </div>
+
+            <div class="path-step">
+              <div class="path-title">Default upstream</div>
+              <div id="trafficUpstreamMeta" class="path-meta">—</div>
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div class="panel">
+
+          <div class="panel-head">
+            <div class="panel-title">Active Routes</div>
+            <div id="trafficRouteCount" class="panel-meta">0 routes</div>
+          </div>
+
+          <table>
+
+            <thead>
+              <tr>
+                <th>Host</th>
+                <th>Upstream</th>
+                <th>State</th>
+              </tr>
+            </thead>
+
+            <tbody id="trafficRoutesBody"></tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- NETWORK -->
+
+    <section id="view-network" class="view">
+
+      <div class="view-head">
+        <div class="view-title">Network Boundary</div>
+        <div class="view-meta">reachability plane</div>
+      </div>
+
+      <div class="network-canvas">
+
+        <div class="network-line">
+
+          <div class="network-step">
+            <div class="network-icon">01</div>
+            <div>
+              <div class="network-name">Primary domain</div>
+              <div id="netDomain" class="network-meta">—</div>
+            </div>
+            <span id="netDomainState" class="chip">—</span>
+          </div>
+
+          <div class="network-step">
+            <div class="network-icon">02</div>
+            <div>
+              <div class="network-name">Expected IPv4</div>
+              <div id="netIpv4" class="network-meta">—</div>
+            </div>
+            <span id="netIpv4State" class="chip">—</span>
+          </div>
+
+          <div class="network-step">
+            <div class="network-icon">03</div>
+            <div>
+              <div class="network-name">DNS resolution</div>
+              <div id="netDns" class="network-meta">—</div>
+            </div>
+            <span id="netDnsState" class="chip">—</span>
+          </div>
+
+          <div class="network-step">
+            <div class="network-icon">04</div>
+            <div>
+              <div class="network-name">HTTP boundary</div>
+              <div id="netHttp" class="network-meta">—</div>
+            </div>
+            <span id="netHttpState" class="chip">—</span>
+          </div>
+
+          <div class="network-step">
+            <div class="network-icon">05</div>
+            <div>
+              <div class="network-name">HTTPS boundary</div>
+              <div id="netHttps" class="network-meta">—</div>
+            </div>
+            <span id="netHttpsState" class="chip">—</span>
+          </div>
+
+          <div class="network-step">
+            <div class="network-icon">06</div>
+            <div>
+              <div class="network-name">External probe</div>
+              <div id="netProbe" class="network-meta">—</div>
+            </div>
+            <span id="netProbeState" class="chip">—</span>
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- CERTIFICATES -->
+
+    <section id="view-certificates" class="view">
+
+      <div class="view-head">
+        <div class="view-title">Certificate Pipeline</div>
+        <div class="view-meta">TLS / ACME activation</div>
+      </div>
+
+      <div class="cert-wrap">
+
+        <div class="cert-grid">
+
+          <div id="certificatePipeline" class="pipeline"></div>
+
+          <div class="cert-summary">
+
+            <div class="cert-summary-head">
+              Certificate State
+            </div>
+
+            <div class="cert-summary-row">
+              <div class="cert-summary-key">TLS mode</div>
+              <div id="certMode" class="cert-summary-value">—</div>
+            </div>
+
+            <div class="cert-summary-row">
+              <div class="cert-summary-key">Environment</div>
+              <div id="certEnvironment" class="cert-summary-value">—</div>
+            </div>
+
+            <div class="cert-summary-row">
+              <div class="cert-summary-key">Challenge</div>
+              <div id="certChallenge" class="cert-summary-value">—</div>
+            </div>
+
+            <div class="cert-summary-row">
+              <div class="cert-summary-key">Cache</div>
+              <div id="certCache" class="cert-summary-value">—</div>
+            </div>
+
+            <div class="cert-summary-row">
+              <div class="cert-summary-key">Runtime</div>
+              <div id="certRuntime" class="cert-summary-value">—</div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- INSPECTOR -->
+
+    <section id="view-inspector" class="view">
+
+      <div class="view-head">
+        <div class="view-title">Edge Inspector</div>
+        <div class="view-meta">live endpoint state</div>
+      </div>
+
+      <div class="inspector">
+
+        <div id="inspectList" class="inspect-list"></div>
+
+        <pre id="inspectCode" class="inspect-code">Select an endpoint.</pre>
+
+      </div>
+
+    </section>
+
+  </main>
 
 </section>
-
-
-<main class="layout">
-
-<section class="stack">
-
-  <div class="panel primary">
-
-    <div class="panel-head">
-      <div class="panel-title">Runtime</div>
-      <div id="runtimeMode" class="panel-meta">—</div>
-    </div>
-
-    <div class="rows">
-
-      <div class="row">
-        <div class="row-key">Service</div>
-        <div id="serviceValue" class="row-value">—</div>
-        <div id="serviceState" class="row-state chip">unknown</div>
-      </div>
-
-      <div class="row">
-        <div class="row-key">Version</div>
-        <div id="versionValue" class="row-value">—</div>
-        <div></div>
-      </div>
-
-      <div class="row">
-        <div class="row-key">Mode</div>
-        <div id="modeValue" class="row-value">—</div>
-        <div></div>
-      </div>
-
-      <div class="row">
-        <div class="row-key">Default upstream</div>
-        <div id="upstreamValue" class="row-value">—</div>
-        <div id="upstreamState" class="row-state chip">unknown</div>
-      </div>
-
-      <div class="row">
-        <div class="row-key">Configured routes</div>
-        <div id="routeCountValue" class="row-value">—</div>
-        <div></div>
-      </div>
-
-      <div class="row">
-        <div class="row-key">Cache TTL</div>
-        <div id="cacheTtlValue" class="row-value">—</div>
-        <div id="cacheState" class="row-state chip">unknown</div>
-      </div>
-
-    </div>
-
-  </div>
-
-
-  <div class="panel primary">
-
-    <div class="panel-head">
-      <div class="panel-title">Route Table</div>
-      <div id="routeCountLabel" class="panel-meta">
-        0 routes
-      </div>
-    </div>
-
-    <div class="table-wrap">
-
-      <table>
-
-        <thead>
-          <tr>
-            <th>Hostname</th>
-            <th>Upstream</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-
-        <tbody id="routesBody">
-
-          <tr>
-            <td colspan="3">
-              Waiting for runtime…
-            </td>
-          </tr>
-
-        </tbody>
-
-      </table>
-
-    </div>
-
-  </div>
-
-
-  <div class="panel">
-
-    <div class="panel-head">
-      <div class="panel-title">
-        Network & Ports
-      </div>
-
-      <div class="panel-meta">
-        public-node preflight
-      </div>
-    </div>
-
-    <div class="rows">
-
-      <div class="row">
-        <div class="row-key">Primary domain</div>
-        <div id="primaryDomainValue" class="row-value">—</div>
-        <div id="domainState" class="row-state chip">unknown</div>
-      </div>
-
-      <div class="row">
-        <div class="row-key">Expected IPv4</div>
-        <div id="expectedIpv4Value" class="row-value">—</div>
-        <div id="ipState" class="row-state chip">unknown</div>
-      </div>
-
-      <div class="row">
-        <div class="row-key">DNS resolution</div>
-        <div id="dnsValue" class="row-value">—</div>
-        <div id="dnsState" class="row-state chip">unknown</div>
-      </div>
-
-      <div class="row">
-        <div class="row-key">HTTP</div>
-        <div id="httpPortValue" class="row-value">—</div>
-        <div id="httpPortState" class="row-state chip">unknown</div>
-      </div>
-
-      <div class="row">
-        <div class="row-key">HTTPS</div>
-        <div id="httpsPortValue" class="row-value">—</div>
-        <div id="httpsPortState" class="row-state chip">unknown</div>
-      </div>
-
-      <div class="row">
-        <div class="row-key">Reachability</div>
-        <div id="reachabilityValue" class="row-value">—</div>
-        <div id="reachabilityState" class="row-state chip">unknown</div>
-      </div>
-
-    </div>
-
-  </div>
-
-</section>
-
-
-<aside class="stack">
-
-  <div class="panel primary">
-
-    <div class="panel-head">
-      <div class="panel-title">
-        Node Readiness
-      </div>
-
-      <div id="readinessMode" class="panel-meta">
-        —
-      </div>
-    </div>
-
-
-    <div class="readiness-summary">
-
-      <div class="readiness-stat">
-        <span class="name">Deployment</span>
-        <span id="deploymentScore" class="score">0/0</span>
-        <div class="readiness-meter"><span id="deploymentMeter"></span></div>
-      </div>
-
-      <div class="readiness-stat">
-        <span class="name">ACME</span>
-        <span id="acmeScore" class="score">0/0</span>
-        <div class="readiness-meter"><span id="acmeMeter"></span></div>
-      </div>
-
-      <div class="readiness-stat">
-        <span class="name">Network</span>
-        <span id="networkScore" class="score">0/0</span>
-        <div class="readiness-meter"><span id="networkMeter"></span></div>
-      </div>
-
-    </div>
-
-
-    <div class="group-title">
-      Deployment
-    </div>
-
-    <div id="deploymentChecks" class="check-group"></div>
-
-
-    <div class="group-title">
-      ACME
-    </div>
-
-    <div id="acmeChecks" class="check-group"></div>
-
-  </div>
-
-
-  <div class="panel">
-
-    <div class="panel-head">
-
-      <div class="panel-title">
-        Certificate & Node State
-      </div>
-
-      <div id="certificateEnvironment" class="panel-meta">
-        —
-      </div>
-
-    </div>
-
-    <div class="rows">
-
-      <div class="row">
-        <div class="row-key">TLS mode</div>
-        <div id="tlsModeValue" class="row-value">—</div>
-        <div id="tlsState" class="row-state chip">unknown</div>
-      </div>
-
-      <div class="row">
-        <div class="row-key">ACME runtime</div>
-        <div id="acmeRuntimeValue" class="row-value">—</div>
-        <div id="acmeRuntimeState" class="row-state chip">unknown</div>
-      </div>
-
-      <div class="row">
-        <div class="row-key">Public node</div>
-        <div id="publicNodeValue" class="row-value">—</div>
-        <div id="publicNodeState" class="row-state chip">unknown</div>
-      </div>
-
-      <div class="row">
-        <div class="row-key">ACME cache</div>
-        <div id="acmeCacheValue" class="row-value">—</div>
-        <div id="acmeCacheState" class="row-state chip">unknown</div>
-      </div>
-
-    </div>
-
-  </div>
-
-
-  <details>
-
-    <summary>
-      Raw diagnostics
-    </summary>
-
-    <pre id="diagnostics" class="codebox">waiting for edge runtime...</pre>
-
-  </details>
-
-</aside>
-
-</main>
 
 
 <footer class="footer">
 
   <span>
-    Monceda Edge • local operator console
+    Monceda Edge • Own the edge.
   </span>
 
   <span>
@@ -1170,880 +2494,535 @@ const EDGE = "https://127.0.0.1:8443";
 const $ = id =>
   document.getElementById(id);
 
+const state = {};
 
-async function json(path){
+const endpoints = {
+  health:"/_edge/health",
+  upstream:"/_edge/upstream",
+  cache:"/_edge/cache",
+  routes:"/_edge/routes",
+  acme:"/_edge/acme",
+  readiness:"/_edge/readiness",
+  onboarding:"/_edge/onboarding",
+  network:"/_edge/network-check",
+  activation:"/_edge/acme-activation"
+};
+
+async function getJSON(path){
 
   const response =
-    await fetch(EDGE + path,{
-      cache:"no-store"
-    });
+    await fetch(
+      EDGE + path,
+      {cache:"no-store"}
+    );
 
   if(!response.ok){
     throw new Error(
-      `${path}: ${response.status}`
+      `${response.status}`
     );
   }
 
   return response.json();
 }
 
+function setChip(id,type,text){
 
-function chip(el,type,text){
+  const el = $(id);
 
   el.className =
-    `row-state chip ${type || ""}`;
+    `chip ${type || ""}`;
 
-  el.textContent = text;
+  el.textContent =
+    text;
 }
 
-
-function addCheck(
-  container,
-  label,
-  value,
-  detail
-){
-
-  const row =
-    document.createElement("div");
-
-  row.className = "check";
-
-
-  const icon =
-    document.createElement("div");
-
-  icon.className =
-    `check-icon ${value ? "good" : "bad"}`;
-
-  icon.textContent =
-    value ? "✓" : "×";
-
-
-  const content =
-    document.createElement("div");
-
-
-  const title =
-    document.createElement("div");
-
-  title.className =
-    "check-label";
-
-  title.textContent =
-    label;
-
-
-  const sub =
-    document.createElement("div");
-
-  sub.className =
-    "check-sub";
-
-  sub.textContent =
-    detail ||
-    (value ? "passed" : "not satisfied");
-
-
-  content.appendChild(title);
-  content.appendChild(sub);
-
-  row.appendChild(icon);
-  row.appendChild(content);
-
-  container.appendChild(row);
-}
-
-
-function score(values){
-
-  const total =
-    values.length;
-
-  const passed =
-    values.filter(Boolean).length;
-
-  return `${passed}/${total}`;
-}
-
-function meter(id, values){
-
-  const total = values.length || 1;
-  const passed = values.filter(Boolean).length;
-
-  $(id).style.width =
-    `${Math.round((passed / total) * 100)}%`;
-}
-
-
-function renderRoutes(data){
-
-  const routes =
-    Array.isArray(data.routes)
-      ? data.routes
-      : [];
-
-  $("routeCountValue").textContent =
-    String(
-      data.count ??
-      routes.length
-    );
-
-  $("routeCountLabel").textContent =
-    `${routes.length} route${
-      routes.length === 1 ? "" : "s"
-    }`;
+function renderTrafficRoutes(routes){
 
   const body =
-    $("routesBody");
+    $("trafficRoutesBody");
 
   body.innerHTML = "";
 
-
-  if(!routes.length){
-
-    body.innerHTML = `
-      <tr>
-        <td colspan="3">
-          No configured hostname routes.
-        </td>
-      </tr>
-    `;
-
-    return;
-  }
-
+  $("trafficRouteCount").textContent =
+    `${routes.length} route${
+      routes.length === 1 ? "" : "s"
+    }`;
 
   for(const route of routes){
 
     const tr =
       document.createElement("tr");
 
-    const host =
-      document.createElement("td");
+    tr.innerHTML = `
+      <td class="mono"></td>
+      <td class="mono"></td>
+      <td><span class="chip good">active</span></td>
+    `;
 
-    const upstream =
-      document.createElement("td");
-
-    const status =
-      document.createElement("td");
-
-
-    host.className = "mono";
-    upstream.className = "mono";
-
-
-    host.textContent =
+    tr.children[0].textContent =
       route.host || "—";
 
-    upstream.textContent =
+    tr.children[1].textContent =
       route.upstream || "—";
-
-    status.innerHTML =
-      '<span class="chip good">active</span>';
-
-
-    tr.appendChild(host);
-    tr.appendChild(upstream);
-    tr.appendChild(status);
 
     body.appendChild(tr);
   }
 }
 
+function renderCertificatePipeline(){
 
-function renderReadiness(data){
-
-  const deployment =
-    $("deploymentChecks");
-
-  deployment.innerHTML = "";
-
-
-  $("readinessMode").textContent =
-    data.mode || "unknown";
-
-
-  const ports =
-    data.public_ports || {};
-
-  const domains =
-    data.public_domains || {};
+  const activation =
+    state.activation || {};
 
   const acme =
-    data.acme || {};
+    state.acme || {};
 
+  const checks =
+    activation.checks || {};
 
-  const deploymentValues = [
-    true,
-    !!domains.valid,
-    !!ports.valid,
-    !!acme.cache_configured
+  const items = [
+    [
+      "Primary domain",
+      !!checks.primary_domain,
+      checks.primary_domain || "not configured"
+    ],
+    [
+      "Eligible domain",
+      !!checks.domain_eligible,
+      checks.domain_eligible ? "eligible" : "blocked"
+    ],
+    [
+      "Route configured",
+      !!checks.route_configured,
+      checks.route_configured ? "present" : "missing"
+    ],
+    [
+      "HTTP port 80",
+      !!checks.http_port_80,
+      checks.http_port_80 ? "public boundary ready" : "local profile"
+    ],
+    [
+      "HTTP-01 challenge",
+      acme.challenge === "http-01",
+      acme.challenge || "—"
+    ],
+    [
+      "ACME runtime",
+      !!activation.runtime_ready,
+      activation.mode || "guarded"
+    ],
+    [
+      "Certificate",
+      acme.tls_mode === "acme",
+      acme.tls_mode || "configured-certificate"
+    ]
   ];
 
+  $("certMode").textContent =
+    acme.tls_mode || "—";
 
-  $("deploymentScore").textContent =
-    score(deploymentValues);
+  $("certEnvironment").textContent =
+    acme.environment || "—";
 
-  meter(
-    "deploymentMeter",
-    deploymentValues
-  );
+  $("certChallenge").textContent =
+    acme.challenge || "—";
 
+  $("certCache").textContent =
+    acme.cache_dir || "—";
 
-  addCheck(
-    deployment,
-    "Runtime configuration",
-    true,
-    `mode: ${data.mode || "unknown"}`
-  );
-
-
-  addCheck(
-    deployment,
-    "Public domain",
-    !!domains.valid,
-    domains.required
-      ? "required"
-      : "optional in development"
-  );
-
-
-  addCheck(
-    deployment,
-    "Public ports",
-    !!ports.valid,
-    `${ports.http ?? "—"} / ${ports.https ?? "—"}`
-  );
-
-
-  addCheck(
-    deployment,
-    "Persistent ACME cache",
-    !!acme.cache_configured,
-    acme.cache_configured
-      ? "available"
-      : "unavailable"
-  );
-}
-
-
-function renderActivation(data){
+  $("certRuntime").textContent =
+    activation.runtime_ready
+      ? "ready"
+      : (activation.mode || "guarded");
 
   const container =
-    $("acmeChecks");
+    $("certificatePipeline");
 
   container.innerHTML = "";
 
+  for(const [name,good,meta] of items){
 
-  const c =
-    data.checks || {};
+    const row =
+      document.createElement("div");
 
-  const env =
-    data.environment || {};
+    row.className =
+      "pipe-step";
 
+    row.innerHTML = `
+      <div class="pipe-dot ${good ? "good" : "warn"}"></div>
 
-  const entries = [
-    ["ACME enabled",c.acme_enabled],
-    ["Public node",c.public_node_enabled],
-    ["Primary domain",!!c.primary_domain],
-    ["Eligible domain",c.domain_eligible],
-    ["Route configured",c.route_configured],
-    ["Contact configured",c.contact_configured],
-    ["Port 80",c.http_port_80],
-    ["Port 443",c.https_port_443]
-  ];
+      <div>
+        <div class="pipe-name"></div>
+        <div class="pipe-meta"></div>
+      </div>
 
+      <span class="chip ${good ? "good" : "warn"}"></span>
+    `;
 
-  const acmeValues =
-    entries.map(
-      item => !!item[1]
+    row.querySelector(".pipe-name").textContent =
+      name;
+
+    row.querySelector(".pipe-meta").textContent =
+      meta;
+
+    row.querySelector(".chip").textContent =
+      good ? "ready" : "waiting";
+
+    container.appendChild(row);
+  }
+}
+
+function renderInspector(){
+
+  const list =
+    $("inspectList");
+
+  const activePath =
+    list.querySelector(".inspect-item.active .inspect-path")
+      ?.textContent || null;
+
+  list.innerHTML = "";
+
+  for(const [name,path] of Object.entries(endpoints)){
+
+    const btn =
+      document.createElement("button");
+
+    btn.className =
+      "inspect-item";
+
+    const payload =
+      state[name] || {};
+
+    const statusText =
+      payload.error ? "ERR" : "200";
+
+    btn.innerHTML = `
+      <div class="inspect-path"></div>
+      <div class="inspect-meta">
+        <span>GET</span>
+        <span class="${payload.error ? "bad" : "good"}">${statusText}</span>
+      </div>
+    `;
+
+    btn.querySelector(".inspect-path").textContent =
+      path;
+
+    btn.addEventListener(
+      "click",
+      () => {
+
+        document
+          .querySelectorAll(".inspect-item")
+          .forEach(el =>
+            el.classList.remove("active")
+          );
+
+        btn.classList.add("active");
+
+        $("inspectCode").textContent =
+          JSON.stringify(
+            state[name] ?? {},
+            null,
+            2
+          );
+      }
     );
 
-  $("acmeScore").textContent =
-    score(acmeValues);
-
-  meter(
-    "acmeMeter",
-    acmeValues
-  );
-
-
-  for(const [label,value] of entries){
-
-    addCheck(
-      container,
-      label,
-      !!value
-    );
+    list.appendChild(btn);
   }
 
+  let targetButton = null;
 
-  $("certificateEnvironment").textContent =
-    env.configured || "—";
+  if(activePath){
+    targetButton =
+      [...list.querySelectorAll(".inspect-item")]
+        .find(btn =>
+          btn.querySelector(".inspect-path")?.textContent === activePath
+        );
+  }
 
+  const first =
+    targetButton ||
+    list.querySelector("button");
 
-  $("acmeRuntimeValue").textContent =
-    data.runtime_ready
-      ? "ready"
-      : "guarded";
-
-
-  chip(
-    $("acmeRuntimeState"),
-    data.runtime_ready
-      ? "good"
-      : "warn",
-    data.runtime_ready
-      ? "ready"
-      : "blocked"
-  );
-
-
-  $("acmeMetric").textContent =
-    env.configured === "staging"
-      ? "Staging"
-      : (
-        data.runtime_ready
-          ? "Ready"
-          : "Guarded"
-      );
-
-
-  $("acmeMetric").className =
-    `metric-value ${
-      data.runtime_ready
-        ? "green"
-        : "amber"
-    }`;
-
-
-  $("acmeMeta").textContent =
-    data.runtime_ready
-      ? "issuance ready"
-      : "activation blocked";
+  if(first){
+    first.click();
+  }
 }
-
-
-function renderNetwork(data){
-
-  $("primaryDomainValue").textContent =
-    data.primary_domain ||
-    "not configured";
-
-  chip(
-    $("domainState"),
-    data.primary_domain
-      ? "good"
-      : "warn",
-    data.primary_domain
-      ? "configured"
-      : "not configured"
-  );
-
-
-  $("expectedIpv4Value").textContent =
-    data.expected_ipv4 ||
-    "not configured";
-
-  chip(
-    $("ipState"),
-    data.expected_ipv4_match
-      ? "good"
-      : "warn",
-    data.expected_ipv4_match
-      ? "match"
-      : "not verified"
-  );
-
-
-  const resolved =
-    Array.isArray(data.resolved_ips)
-      ? data.resolved_ips
-      : [];
-
-  $("dnsValue").textContent =
-    resolved.length
-      ? resolved.join(", ")
-      : "no resolution";
-
-  chip(
-    $("dnsState"),
-    data.dns_resolves
-      ? "good"
-      : "warn",
-    data.dns_resolves
-      ? "resolved"
-      : "unresolved"
-  );
-
-
-  const http =
-    data.http01 || {};
-
-  $("httpPortValue").textContent =
-    String(
-      http.configured_port ??
-      "—"
-    );
-
-  chip(
-    $("httpPortState"),
-    http.configured_correctly
-      ? "good"
-      : "warn",
-    http.configured_correctly
-      ? "public"
-      : "local"
-  );
-
-
-  const https =
-    data.https || {};
-
-  $("httpsPortValue").textContent =
-    String(
-      https.configured_port ??
-      "—"
-    );
-
-  chip(
-    $("httpsPortState"),
-    https.configured_correctly
-      ? "good"
-      : "warn",
-    https.configured_correctly
-      ? "public"
-      : "local"
-  );
-
-
-  $("reachabilityValue").textContent =
-    data.message || "—";
-
-  chip(
-    $("reachabilityState"),
-    data.external_reachability_verified
-      ? "good"
-      : "warn",
-    data.external_reachability_verified
-      ? "verified"
-      : "not verified"
-  );
-
-
-  const networkValues = [
-    !!data.primary_domain,
-    !!data.dns_resolves,
-    !!data.expected_ipv4_match,
-    !!http.configured_correctly,
-    !!https.configured_correctly,
-    !!data.external_reachability_verified
-  ];
-
-
-  $("networkScore").textContent =
-    score(networkValues);
-
-  meter(
-    "networkMeter",
-    networkValues
-  );
-
-
-  const publicReady =
-    networkValues.every(Boolean);
-
-
-  $("publicMetric").textContent =
-    publicReady
-      ? "Ready"
-      : "Local";
-
-
-  $("publicMetric").className =
-    `metric-value ${
-      publicReady
-        ? "green"
-        : "amber"
-    }`;
-
-
-  $("publicMeta").textContent =
-    data.primary_domain ||
-    "no public domain";
-}
-
 
 async function refresh(){
 
-  const diag = {
-    checkedAt:
-      new Date().toISOString()
-  };
-
-
-  $("lastCheck").textContent =
-    "checking…";
-
-
-  let online = false;
-
-
-  try{
-
-    const health =
-      await json("/_edge/health");
-
-    diag.health =
-      health;
-
-    online = true;
-
-
-    $("runtimeMetric").textContent =
-      "Online";
-
-    $("runtimeMetric").className =
-      "metric-value green";
-
-
-    $("runtimeBadge").className =
-      "badge online";
-
-    $("runtimeBadgeText").textContent =
-      "online";
-
-
-    $("versionBadge").textContent =
-      `v${health.version || "—"}`;
-
-
-    $("serviceValue").textContent =
-      health.service ||
-      "monceda-edge";
-
-
-    $("versionValue").textContent =
-      health.version || "—";
-
-
-    $("modeValue").textContent =
-      health.mode || "—";
-
-
-    $("runtimeMode").textContent =
-      health.mode || "—";
-
-
-    chip(
-      $("serviceState"),
-      "good",
-      health.status || "healthy"
-    );
-
-  }catch(error){
-
-    $("runtimeMetric").textContent =
-      "Offline";
-
-    $("runtimeMetric").className =
-      "metric-value red";
-
-
-    $("runtimeBadge").className =
-      "badge offline";
-
-    $("runtimeBadgeText").textContent =
-      "offline";
-
-
-    diag.healthError =
-      String(error);
-  }
-
-
-  if(online){
+  for(const [name,path] of Object.entries(endpoints)){
 
     try{
 
-      const upstream =
-        await json("/_edge/upstream");
-
-      diag.upstream =
-        upstream;
-
-
-      const target =
-        upstream.upstream ||
-        upstream.target ||
-        upstream.url ||
-        "—";
-
-
-      $("upstreamMetric").textContent =
-        "Connected";
-
-      $("upstreamMetric").className =
-        "metric-value green";
-
-
-      $("upstreamMeta").textContent =
-        target;
-
-
-      $("upstreamValue").textContent =
-        target;
-
-
-      chip(
-        $("upstreamState"),
-        "good",
-        "active"
-      );
+      state[name] =
+        await getJSON(path);
 
     }catch(error){
 
-      diag.upstreamError =
-        String(error);
-
-      $("upstreamMetric").textContent =
-        "Unavailable";
-
-      $("upstreamMetric").className =
-        "metric-value red";
-
-      chip(
-        $("upstreamState"),
-        "bad",
-        "failed"
-      );
-    }
-
-
-    try{
-
-      const cache =
-        await json("/_edge/cache");
-
-      diag.cache =
-        cache;
-
-
-      const enabled =
-        cache.enabled !== false;
-
-
-      $("cacheMetric").textContent =
-        enabled
-          ? "Enabled"
-          : "Disabled";
-
-
-      $("cacheMetric").className =
-        `metric-value ${
-          enabled
-            ? "green"
-            : "amber"
-        }`;
-
-
-      const ttl =
-        cache.ttl_seconds ??
-        cache.ttl ??
-        "—";
-
-
-      $("cacheMeta").textContent =
-        `TTL ${ttl}s`;
-
-
-      $("cacheTtlValue").textContent =
-        `${ttl}s`;
-
-
-      chip(
-        $("cacheState"),
-        enabled
-          ? "good"
-          : "warn",
-        enabled
-          ? "enabled"
-          : "disabled"
-      );
-
-    }catch(error){
-
-      diag.cacheError =
-        String(error);
-    }
-
-
-    try{
-
-      const routes =
-        await json("/_edge/routes");
-
-      diag.routes =
-        routes;
-
-      renderRoutes(routes);
-
-    }catch(error){
-
-      diag.routesError =
-        String(error);
-    }
-
-
-    try{
-
-      const acme =
-        await json("/_edge/acme");
-
-      diag.acme =
-        acme;
-
-
-      const tlsMode =
-        acme.tls_mode ||
-        "configured-certificate";
-
-
-      $("tlsModeValue").textContent =
-        tlsMode;
-
-
-      $("tlsMetric").textContent =
-        tlsMode === "acme"
-          ? "ACME"
-          : "Local cert";
-
-
-      $("tlsMetric").className =
-        "metric-value green";
-
-
-      $("tlsMeta").textContent =
-        tlsMode;
-
-
-      chip(
-        $("tlsState"),
-        "good",
-        "enabled"
-      );
-
-
-      $("acmeCacheValue").textContent =
-        acme.cache_dir || "—";
-
-
-      chip(
-        $("acmeCacheState"),
-        acme.cache_dir
-          ? "good"
-          : "warn",
-        acme.cache_dir
-          ? "configured"
-          : "missing"
-      );
-
-    }catch(error){
-
-      diag.acmeError =
-        String(error);
-    }
-
-
-    try{
-
-      const readiness =
-        await json("/_edge/readiness");
-
-      diag.readiness =
-        readiness;
-
-      renderReadiness(readiness);
-
-    }catch(error){
-
-      diag.readinessError =
-        String(error);
-    }
-
-
-    try{
-
-      const activation =
-        await json("/_edge/acme-activation");
-
-      diag.activation =
-        activation;
-
-      renderActivation(activation);
-
-
-      const checks =
-        activation.checks || {};
-
-
-      $("publicNodeValue").textContent =
-        checks.public_node_enabled
-          ? "enabled"
-          : "disabled";
-
-
-      chip(
-        $("publicNodeState"),
-        checks.public_node_enabled
-          ? "good"
-          : "warn",
-        checks.public_node_enabled
-          ? "enabled"
-          : "local"
-      );
-
-    }catch(error){
-
-      diag.activationError =
-        String(error);
-    }
-
-
-    try{
-
-      const network =
-        await json("/_edge/network-check");
-
-      diag.network =
-        network;
-
-      renderNetwork(network);
-
-    }catch(error){
-
-      diag.networkError =
-        String(error);
+      state[name] = {
+        error:String(error)
+      };
     }
   }
 
+  const h =
+    state.health || {};
 
-  $("diagnostics").textContent =
-    JSON.stringify(
-      diag,
-      null,
-      2
-    );
+  const online =
+    !h.error;
 
+  $("runtimeBadge").className =
+    `badge ${online ? "online" : ""}`;
 
-  const now =
-    new Date();
+  $("runtimeBadgeText").textContent =
+    online ? "online" : "offline";
 
+  $("versionBadge").textContent =
+    `v${h.version || "—"}`;
+
+  $("edgeNodeMeta").textContent =
+    `v${h.version || "—"} • ${h.mode || "—"}`;
+
+  $("edgeNodeStatus").className =
+    `node-status ${online ? "good" : "warn"}`;
+
+  $("edgeNodeStatus").lastElementChild.textContent =
+    online ? "healthy" : "offline";
+
+  $("sumRuntime").textContent =
+    online ? "Online" : "Offline";
+
+  $("sumRuntime").className =
+    `summary-value ${online ? "good" : "bad"}`;
+
+  const routes =
+    state.routes?.routes || [];
+
+  $("sumRoutes").textContent =
+    String(routes.length);
+
+  if(routes[0]){
+    $("routeATitle").textContent =
+      routes[0].host || "route 1";
+
+    $("routeAMeta").textContent =
+      routes[0].upstream || "—";
+  }
+
+  if(routes[1]){
+    $("routeBTitle").textContent =
+      routes[1].host || "route 2";
+
+    $("routeBMeta").textContent =
+      routes[1].upstream || "—";
+  }
+
+  renderTrafficRoutes(routes);
+
+  $("trafficEdgeMeta").textContent =
+    `${h.mode || "—"} • v${h.version || "—"}`;
+
+  const defaultUpstream =
+    state.routes?.default_upstream ||
+    state.upstream?.upstream ||
+    state.upstream?.target ||
+    "—";
+
+  $("trafficUpstreamMeta").textContent =
+    defaultUpstream;
+
+  const cache =
+    state.cache || {};
+
+  const cacheEnabled =
+    !cache.error &&
+    cache.enabled !== false;
+
+  const ttl =
+    cache.ttl_seconds ??
+    cache.ttl ??
+    "—";
+
+  $("cacheNodeTitle").textContent =
+    cacheEnabled ? "Enabled" : "Disabled";
+
+  $("cacheNodeMeta").textContent =
+    `TTL ${ttl}s`;
+
+  $("sumCache").textContent =
+    cacheEnabled ? "Enabled" : "Disabled";
+
+  $("sumCache").className =
+    `summary-value ${cacheEnabled ? "good" : "warn"}`;
+
+  $("sumCacheMeta").textContent =
+    `TTL ${ttl}s`;
+
+  $("trafficCacheMeta").textContent =
+    cacheEnabled
+      ? `cache enabled • TTL ${ttl}s`
+      : "cache disabled";
+
+  const acme =
+    state.acme || {};
+
+  $("tlsNodeTitle").textContent =
+    acme.tls_mode === "acme"
+      ? "ACME"
+      : "Local certificate";
+
+  $("tlsNodeMeta").textContent =
+    `${acme.environment || "—"} • ${acme.challenge || "—"}`;
+
+  $("sumTls").textContent =
+    acme.tls_mode === "acme"
+      ? "ACME"
+      : "Local cert";
+
+  $("sumTlsMeta").textContent =
+    acme.tls_mode ||
+    "configured-certificate";
+
+  const activation =
+    state.activation || {};
+
+  $("sumAcme").textContent =
+    activation.runtime_ready
+      ? "Ready"
+      : (
+        activation.environment?.configured === "staging"
+          ? "Staging"
+          : "Guarded"
+      );
+
+  $("sumAcme").className =
+    `summary-value ${
+      activation.runtime_ready
+        ? "good"
+        : "warn"
+    }`;
+
+  $("sumAcmeMeta").textContent =
+    activation.mode || "—";
+
+  $("tlsNodeStatus").className =
+    `node-status ${
+      activation.runtime_ready
+        ? "good"
+        : "warn"
+    }`;
+
+  $("tlsNodeStatus").lastElementChild.textContent =
+    activation.runtime_ready
+      ? "ready"
+      : "guarded";
+
+  const network =
+    state.network || {};
+
+  $("netDomain").textContent =
+    network.primary_domain ||
+    "not configured";
+
+  $("netIpv4").textContent =
+    network.expected_ipv4 ||
+    "not configured";
+
+  $("netDns").textContent =
+    network.resolved_ips?.length
+      ? network.resolved_ips.join(", ")
+      : "no resolution";
+
+  $("netHttp").textContent =
+    `port ${
+      network.http01?.configured_port ?? "—"
+    }`;
+
+  $("netHttps").textContent =
+    `port ${
+      network.https?.configured_port ?? "—"
+    }`;
+
+  $("netProbe").textContent =
+    network.message || "—";
+
+  setChip(
+    "netDomainState",
+    network.primary_domain ? "good" : "warn",
+    network.primary_domain ? "configured" : "local"
+  );
+
+  setChip(
+    "netIpv4State",
+    network.expected_ipv4_match ? "good" : "warn",
+    network.expected_ipv4_match ? "match" : "not verified"
+  );
+
+  setChip(
+    "netDnsState",
+    network.dns_resolves ? "good" : "warn",
+    network.dns_resolves ? "resolved" : "unresolved"
+  );
+
+  setChip(
+    "netHttpState",
+    network.http01?.configured_correctly ? "good" : "warn",
+    network.http01?.configured_correctly ? "public" : "local"
+  );
+
+  setChip(
+    "netHttpsState",
+    network.https?.configured_correctly ? "good" : "warn",
+    network.https?.configured_correctly ? "public" : "local"
+  );
+
+  setChip(
+    "netProbeState",
+    network.external_reachability_verified ? "good" : "warn",
+    network.external_reachability_verified ? "verified" : "not verified"
+  );
+
+  const publicReady =
+    !!network.primary_domain &&
+    !!network.dns_resolves &&
+    !!network.expected_ipv4_match &&
+    !!network.http01?.configured_correctly &&
+    !!network.https?.configured_correctly &&
+    !!network.external_reachability_verified;
+
+  $("sumPublic").textContent =
+    publicReady ? "Ready" : "Local";
+
+  $("sumPublic").className =
+    `summary-value ${
+      publicReady ? "good" : "warn"
+    }`;
+
+  $("sumPublicMeta").textContent =
+    network.primary_domain ||
+    "no public domain";
+
+  $("internetMeta").textContent =
+    network.primary_domain ||
+    "no public domain";
+
+  $("internetStatus").className =
+    `node-status ${
+      publicReady ? "good" : "warn"
+    }`;
+
+  $("internetStatus").lastElementChild.textContent =
+    publicReady ? "reachable" : "local only";
+
+  renderCertificatePipeline();
+  renderInspector();
 
   $("lastCheck").textContent =
     `last check: ${
-      now.toLocaleTimeString([],{
+      new Date().toLocaleTimeString([],{
         hour:"2-digit",
         minute:"2-digit",
         second:"2-digit"
@@ -2052,12 +3031,43 @@ async function refresh(){
 }
 
 
+/* NAVIGATION */
+
+document
+  .querySelectorAll(".rail-btn")
+  .forEach(button => {
+
+    button.addEventListener(
+      "click",
+      () => {
+
+        document
+          .querySelectorAll(".rail-btn")
+          .forEach(el =>
+            el.classList.remove("active")
+          );
+
+        document
+          .querySelectorAll(".view")
+          .forEach(el =>
+            el.classList.remove("active")
+          );
+
+        button.classList.add("active");
+
+        $(
+          `view-${button.dataset.view}`
+        ).classList.add("active");
+      }
+    );
+  });
+
+
 $("refreshBtn")
   .addEventListener(
     "click",
     refresh
   );
-
 
 refresh();
 
