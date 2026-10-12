@@ -2489,12 +2489,23 @@ td{
 
 
 <script>
-const EDGE = "https://127.0.0.1:8443";
+const EDGE = window.location.origin;
 
 const $ = id =>
   document.getElementById(id);
 
 const state = {};
+
+function edgeFetch(url){
+  const sep = url.includes("?") ? "&" : "?";
+  return fetch(`${url}${sep}_=${Date.now()}`, {
+    cache: "no-store",
+    headers: {
+      "Cache-Control": "no-cache"
+    }
+  });
+}
+
 
 const endpoints = {
   health:"/_edge/health",
@@ -2782,6 +2793,8 @@ async function refresh(){
 
   $("versionBadge").textContent =
     `v${h.version || "—"}`;
+
+  console.debug("[Monceda Edge] runtime", h);
 
   $("edgeNodeMeta").textContent =
     `v${h.version || "—"} • ${h.mode || "—"}`;
