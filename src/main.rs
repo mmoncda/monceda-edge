@@ -33,6 +33,14 @@ enum ConfigCommands {
         #[arg(long, default_value = "monceda-edge.toml")]
         config: String,
     },
+
+    Show {
+        #[arg(long, default_value = "monceda-edge.toml")]
+        config: String,
+
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -388,6 +396,8 @@ async fn main() {
 
         Some(Commands::Config { command }) => match command {
             ConfigCommands::Validate { config } => validate_config(&config),
+
+            ConfigCommands::Show { config, json } => show_config(&config, json),
         },
 
         Some(Commands::Version) => {
@@ -1648,6 +1658,159 @@ fn normalize_health_path(path: &str) -> String {
     } else {
         format!("/{path}")
     }
+}
+
+fn show_config(config_path: &str, json: bool) -> Result<(), String> {
+    let config = load_config(config_path)?;
+
+    if json {
+        let value = serde_json::json!({
+            "server": {
+                "host": config.server.host,
+                "port": config.server.port,
+                "static_dir": config.server.static_dir,
+            },
+            "http": {
+                "enabled": config.http.enabled,
+                "port": config.http.port,
+                "redirect_to_https": config.http.redirect_to_https,
+            },
+            "tls": {
+                "enabled": config.tls.enabled,
+                "port": config.tls.port,
+                "cert": config.tls.cert,
+                "key": config.tls.key,
+            },
+            "proxy": {
+                "enabled": config.proxy.enabled,
+                "upstream": config.proxy.upstream,
+                "health_path": config.proxy.health_path,
+            },
+            "cache": {
+                "enabled": config.cache.enabled,
+                "ttl_seconds": config.cache.ttl_seconds,
+            },
+            "acme": {
+                "enabled": config.acme.enabled,
+                "environment": config.acme.environment,
+                "email_configured": !config.acme.email.trim().is_empty(),
+                "cache_dir": config.acme.cache_dir,
+                "challenge": config.acme.challenge,
+            },
+            "deployment": {
+                "mode": config.deployment.mode,
+                "require_public_ports": config.deployment.require_public_ports,
+                "require_public_domains": config.deployment.require_public_domains,
+            },
+            "public_node": {
+                "enabled": config.public_node.enabled,
+                "primary_domain": config.public_node.primary_domain,
+                "expected_ipv4": config.public_node.expected_ipv4,
+            },
+            "routes": config.routes,
+        });
+
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&value)
+                .map_err(|error| format!("Unable to serialize config: {error}"))?
+        );
+
+        return Ok(());
+    }
+
+    println!("Monceda Edge Effective Configuration");
+    println!("────────────────────────────────");
+    println!();
+
+    println!("Server");
+    println!("  host        {}", config.server.host);
+    println!("  port        {}", config.server.port);
+    println!("  static_dir  {}", config.server.static_dir);
+    println!();
+
+    println!("HTTP");
+    println!("  enabled     {}", config.http.enabled);
+    println!("  port        {}", config.http.port);
+    println!("  redirect    {}", config.http.redirect_to_https);
+    println!();
+
+    println!("TLS");
+    println!("  enabled     {}", config.tls.enabled);
+    println!("  port        {}", config.tls.port);
+    println!("  cert        {}", config.tls.cert);
+    println!("  key         {}", config.tls.key);
+    println!();
+
+    println!("Proxy");
+    println!("  enabled     {}", config.proxy.enabled);
+    println!("  upstream    {}", config.proxy.upstream);
+    println!("  health      {}", config.proxy.health_path);
+    println!();
+
+    println!("Cache");
+    println!("  enabled     {}", config.cache.enabled);
+    println!("  ttl         {}s", config.cache.ttl_seconds);
+    println!();
+
+    println!("ACME");
+    println!("  enabled      {}", config.acme.enabled);
+    println!("  environment  {}", config.acme.environment);
+    println!("  challenge    {}", config.acme.challenge);
+    println!("  cache_dir    {}", config.acme.cache_dir);
+    println!(
+        "  email        {}",
+        if config.acme.email.trim().is_empty() {
+            "not configured"
+        } else {
+            "configured"
+        }
+    );
+    println!();
+
+    println!("Deployment");
+    println!("  mode                    {}", config.deployment.mode);
+    println!(
+        "  require_public_ports    {}",
+        config.deployment.require_public_ports
+    );
+    println!(
+        "  require_public_domains  {}",
+        config.deployment.require_public_domains
+    );
+    println!();
+
+    println!("Public Node");
+    println!("  enabled         {}", config.public_node.enabled);
+    println!(
+        "  primary_domain  {}",
+        if config.public_node.primary_domain.trim().is_empty() {
+            "—"
+        } else {
+            &config.public_node.primary_domain
+        }
+    );
+    println!(
+        "  expected_ipv4   {}",
+        if config.public_node.expected_ipv4.trim().is_empty() {
+            "—"
+        } else {
+            &config.public_node.expected_ipv4
+        }
+    );
+    println!();
+
+    println!("Routes");
+
+    if config.routes.is_empty() {
+        println!("  none");
+    } else {
+        for route in &config.routes {
+            println!("  {} -> {}", route.host, route.upstream);
+        }
+    }
+
+    Ok(())
 }
 
 fn validate_config(config_path: &str) -> Result<(), String> {
