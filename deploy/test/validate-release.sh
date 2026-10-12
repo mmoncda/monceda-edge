@@ -94,6 +94,11 @@ check_bundle() {
     bash -n "$DIR/install.sh"
     bash -n "$DIR/health-check.sh"
 
+    if ! grep -q "^version=$VERSION$" "$DIR/RELEASE"; then
+        echo "FAIL: RELEASE metadata version does not match $VERSION"
+        FAIL=1
+    fi
+
     echo "Bundle structure: OK"
 
     rm -rf "$TMP"
