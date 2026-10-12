@@ -1786,6 +1786,7 @@ fn doctor(config_path: &str) -> Result<(), String> {
 
         let mut hosts = std::collections::HashSet::<String>::new();
 
+        let route_failures_before = failures;
         for route in &config.routes {
             let host = route.host.trim().trim_end_matches('.').to_lowercase();
 
@@ -1806,7 +1807,7 @@ fn doctor(config_path: &str) -> Result<(), String> {
             }
         }
 
-        if failures == 0 {
+        if failures == route_failures_before {
             pass("Route definitions are structurally valid");
         }
     }
