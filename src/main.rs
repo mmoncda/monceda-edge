@@ -28,6 +28,14 @@ struct Cli {
 }
 
 #[derive(Subcommand)]
+enum ConfigCommands {
+    Validate {
+        #[arg(long, default_value = "monceda-edge.toml")]
+        config: String,
+    },
+}
+
+#[derive(Subcommand)]
 enum Commands {
     Serve {
         #[arg(long)]
@@ -48,6 +56,11 @@ enum Commands {
     Doctor {
         #[arg(long, default_value = "monceda-edge.toml")]
         config: String,
+    },
+
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommands,
     },
 
     Version,
@@ -372,6 +385,10 @@ async fn main() {
         Some(Commands::Status { config }) => status(&config).await,
 
         Some(Commands::Doctor { config }) => doctor(&config),
+
+        Some(Commands::Config { command }) => match command {
+            ConfigCommands::Validate { config } => validate_config(&config),
+        },
 
         Some(Commands::Version) => {
             println!("Monceda Edge v{VERSION}");
@@ -1630,6 +1647,197 @@ fn normalize_health_path(path: &str) -> String {
         path.to_string()
     } else {
         format!("/{path}")
+    }
+}
+
+fn validate_config(config_path: &str) -> Result<(), String> {
+    let mut failures = 0usize;
+
+    fn pass(message: &str) {
+        println!("[PASS] {message}");
+    }
+
+    fn fail(message: &str, failures: &mut usize) {
+        *failures += 1;
+        println!("[FAIL] {message}");
+    }
+
+    println!("Monceda Edge Config Validator");
+    println!("────────────────────────────────");
+    println!();
+
+    let contents = match std::fs::read_to_string(config_path) {
+        Ok(contents) => contents,
+        Err(error) => {
+            fail(
+                &format!("Unable to read configuration {config_path}: {error}"),
+                &mut failures,
+            );
+
+            println!();
+            println!("Result: FAIL");
+
+            return Err("Configuration validation failed".to_string());
+        }
+    };
+
+    let config: Config = match toml::from_str(&contents) {
+        Ok(config) => {
+            pass("TOML parsed successfully");
+            config
+        }
+
+        Err(error) => {
+            fail(&format!("Invalid TOML: {error}"), &mut failures);
+
+            println!();
+            println!("Result: FAIL");
+
+            return Err("Configuration validation failed".to_string());
+        }
+    };
+
+    if config.server.host.trim().is_empty() {
+        fail("Server host cannot be empty", &mut failures);
+    } else if config.server.port == 0 {
+        fail("Server port cannot be 0", &mut failures);
+    } else if config.server.static_dir.trim().is_empty() {
+        fail("Static directory cannot be empty", &mut failures);
+    } else {
+        pass("Server configuration valid");
+    }
+
+    if config.http.enabled && config.http.port == 0 {
+        fail("HTTP port cannot be 0", &mut failures);
+    } else {
+        pass("HTTP configuration valid");
+    }
+
+    if config.tls.enabled {
+        if config.tls.port == 0 {
+            fail("TLS port cannot be 0", &mut failures);
+        }
+
+        if config.tls.cert.trim().is_empty() {
+            fail("TLS certificate path cannot be empty", &mut failures);
+        }
+
+        if config.tls.key.trim().is_empty() {
+            fail("TLS private key path cannot be empty", &mut failures);
+        }
+    }
+
+    if config.tls.enabled
+        && config.tls.port != 0
+        && !config.tls.cert.trim().is_empty()
+        && !config.tls.key.trim().is_empty()
+    {
+        pass("TLS configuration valid");
+    } else if !config.tls.enabled {
+        pass("TLS configuration valid");
+    }
+
+    if config.proxy.enabled {
+        if !(config.proxy.upstream.starts_with("http://")
+            || config.proxy.upstream.starts_with("https://"))
+        {
+            fail(
+                &format!("Invalid proxy upstream: {}", config.proxy.upstream),
+                &mut failures,
+            );
+        } else {
+            pass("Proxy configuration valid");
+        }
+    } else {
+        pass("Proxy configuration valid");
+    }
+
+    let mut hosts = std::collections::HashSet::<String>::new();
+    let route_failures_before = failures;
+
+    for route in &config.routes {
+        let host = route.host.trim().trim_end_matches('.').to_lowercase();
+
+        if host.is_empty() {
+            fail("Route host cannot be empty", &mut failures);
+        } else if !hosts.insert(host.clone()) {
+            fail(&format!("Duplicate route host: {host}"), &mut failures);
+        }
+
+        if !(route.upstream.starts_with("http://") || route.upstream.starts_with("https://")) {
+            fail(
+                &format!(
+                    "Invalid route upstream for {}: {}",
+                    route.host, route.upstream
+                ),
+                &mut failures,
+            );
+        }
+    }
+
+    if failures == route_failures_before {
+        pass(&format!("{} route(s) valid", config.routes.len()));
+    }
+
+    if config.acme.enabled {
+        if config.acme.environment != "staging" && config.acme.environment != "production" {
+            fail(
+                &format!("Unknown ACME environment: {}", config.acme.environment),
+                &mut failures,
+            );
+        }
+
+        if config.acme.challenge != "http-01" {
+            fail(
+                &format!("Unsupported ACME challenge: {}", config.acme.challenge),
+                &mut failures,
+            );
+        }
+
+        if config.acme.cache_dir.trim().is_empty() {
+            fail("ACME cache directory cannot be empty", &mut failures);
+        }
+    }
+
+    if failures == route_failures_before
+        && (!config.acme.enabled
+            || ((config.acme.environment == "staging" || config.acme.environment == "production")
+                && config.acme.challenge == "http-01"
+                && !config.acme.cache_dir.trim().is_empty()))
+    {
+        pass("ACME configuration valid");
+    }
+
+    if config.deployment.require_public_ports && (config.http.port != 80 || config.tls.port != 443)
+    {
+        fail(
+            "Public deployment requires HTTP 80 and HTTPS 443",
+            &mut failures,
+        );
+    }
+
+    if config.deployment.require_public_domains
+        && config.public_node.primary_domain.trim().is_empty()
+    {
+        fail("Public deployment requires primary_domain", &mut failures);
+    }
+
+    if failures == 0 {
+        pass("Deployment configuration valid");
+    }
+
+    println!();
+    println!("────────────────────────────────");
+
+    if failures > 0 {
+        println!("Result: FAIL ({failures} failure(s))");
+
+        Err(format!(
+            "Configuration validation failed with {failures} failure(s)"
+        ))
+    } else {
+        println!("Result: PASS");
+        Ok(())
     }
 }
 
