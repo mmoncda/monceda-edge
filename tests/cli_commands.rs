@@ -97,3 +97,43 @@ fn doctor_reports_local_node() {
     assert!(stdout.contains("Configuration parsed successfully"));
     assert!(stdout.contains("Result: PASS") || stdout.contains("Result: WARN"));
 }
+
+#[test]
+fn config_show_outputs_effective_config() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let config = format!("{root}/monceda-edge.toml");
+
+    let output = Command::new(edge_bin())
+        .args(["config", "show", "--config", &config])
+        .output()
+        .expect("failed to run config show");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(stdout.contains("Monceda Edge Effective Configuration"));
+    assert!(stdout.contains("Server"));
+    assert!(stdout.contains("Routes"));
+}
+
+#[test]
+fn config_show_json_outputs_valid_json() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let config = format!("{root}/monceda-edge.toml");
+
+    let output = Command::new(edge_bin())
+        .args(["config", "show", "--config", &config, "--json"])
+        .output()
+        .expect("failed to run config show json");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let value: serde_json::Value = serde_json::from_str(&stdout).expect("invalid JSON output");
+
+    assert_eq!(value["server"]["host"], "127.0.0.1");
+
+    assert!(value["routes"].is_array());
+}
