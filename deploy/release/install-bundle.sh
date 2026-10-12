@@ -91,6 +91,57 @@ sudo install \
 
 sudo systemctl daemon-reload
 
+
+# Generate a local fallback TLS certificate for first boot.
+FALLBACK_DIR="/var/lib/monceda-edge/fallback"
+CERT="$FALLBACK_DIR/localhost-cert.pem"
+KEY="$FALLBACK_DIR/localhost-key.pem"
+
+if ! sudo test -f "$CERT" || ! sudo test -f "$KEY"; then
+    if ! command -v openssl >/dev/null 2>&1; then
+        echo "Error: openssl is required to generate the fallback TLS certificate."
+        exit 1
+    fi
+
+    echo "Generating fallback localhost TLS certificate..."
+
+    TMP_TLS_DIR="$(mktemp -d)"
+
+    cleanup_tls() {
+        rm -rf "$TMP_TLS_DIR"
+    }
+    trap cleanup_tls EXIT
+
+    openssl req \
+        -x509 \
+        -newkey rsa:2048 \
+        -nodes \
+        -days 3650 \
+        -subj "/CN=localhost" \
+        -keyout "$TMP_TLS_DIR/localhost-key.pem" \
+        -out "$TMP_TLS_DIR/localhost-cert.pem" \
+        >/dev/null 2>&1
+
+    sudo install \
+        -o monceda-edge \
+        -g monceda-edge \
+        -m 0600 \
+        "$TMP_TLS_DIR/localhost-key.pem" \
+        "$KEY"
+
+    sudo install \
+        -o monceda-edge \
+        -g monceda-edge \
+        -m 0644 \
+        "$TMP_TLS_DIR/localhost-cert.pem" \
+        "$CERT"
+
+    cleanup_tls
+    trap - EXIT
+
+    echo "Fallback TLS certificate created."
+fi
+
 echo
 echo "Monceda Edge bundle installed."
 echo
@@ -101,3 +152,5 @@ echo
 echo "Next:"
 echo "  sudo systemctl start monceda-edge"
 echo "  sudo journalctl -u monceda-edge -f"
+
+

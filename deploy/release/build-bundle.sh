@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Keep macOS AppleDouble/xattr metadata out of Linux release archives.
+export COPYFILE_DISABLE=1
+export COPY_EXTENDED_ATTRIBUTES_DISABLE=1
+
 VERSION="${1:-0.8.1}"
 ARCH="${2:-}"
 BINARY="${3:-}"
@@ -76,7 +80,7 @@ META
 
 (
     cd "$DIST"
-    tar -czf "$NAME.tar.gz" "$NAME"
+    tar --no-xattrs -czf "$NAME.tar.gz" "$NAME"
 )
 
 if command -v shasum >/dev/null 2>&1; then
