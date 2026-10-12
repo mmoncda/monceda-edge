@@ -18,7 +18,7 @@ use std::{
 use tokio::sync::RwLock;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 
-const VERSION: &str = "0.8.2";
+const VERSION: &str = "0.8.3";
 
 #[derive(Parser)]
 #[command(name = "monceda-edge", about = "Portable open-source edge platform")]
