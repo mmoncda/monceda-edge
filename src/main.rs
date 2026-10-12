@@ -45,6 +45,11 @@ enum Commands {
         config: String,
     },
 
+    Doctor {
+        #[arg(long, default_value = "monceda-edge.toml")]
+        config: String,
+    },
+
     Version,
 }
 
@@ -365,6 +370,8 @@ async fn main() {
         Some(Commands::Serve { host, port, config }) => serve(&config, host, port).await,
 
         Some(Commands::Status { config }) => status(&config).await,
+
+        Some(Commands::Doctor { config }) => doctor(&config),
 
         Some(Commands::Version) => {
             println!("Monceda Edge v{VERSION}");
@@ -1623,6 +1630,306 @@ fn normalize_health_path(path: &str) -> String {
         path.to_string()
     } else {
         format!("/{path}")
+    }
+}
+
+fn doctor(config_path: &str) -> Result<(), String> {
+    let mut warnings = 0usize;
+    let mut failures = 0usize;
+
+    fn pass(message: &str) {
+        println!("[PASS] {message}");
+    }
+
+    fn warn(message: &str, warnings: &mut usize) {
+        *warnings += 1;
+        println!("[WARN] {message}");
+    }
+
+    fn fail(message: &str, failures: &mut usize) {
+        *failures += 1;
+        println!("[FAIL] {message}");
+    }
+
+    println!("Monceda Edge Doctor");
+    println!("────────────────────────────────");
+    println!();
+
+    let config_file = std::path::Path::new(config_path);
+
+    if !config_file.exists() {
+        fail(
+            &format!("Configuration file not found: {config_path}"),
+            &mut failures,
+        );
+
+        println!();
+        println!("Result: FAIL");
+
+        return Err(format!("Doctor found {failures} failure(s)"));
+    }
+
+    if !config_file.is_file() {
+        fail(
+            &format!("Configuration path is not a file: {config_path}"),
+            &mut failures,
+        );
+
+        println!();
+        println!("Result: FAIL");
+
+        return Err(format!("Doctor found {failures} failure(s)"));
+    }
+
+    pass(&format!("Configuration file found: {config_path}"));
+
+    let config = match load_config(config_path) {
+        Ok(config) => {
+            pass("Configuration parsed successfully");
+            config
+        }
+
+        Err(error) => {
+            fail(&error, &mut failures);
+
+            println!();
+            println!("Result: FAIL");
+
+            return Err(format!("Doctor found {failures} failure(s)"));
+        }
+    };
+
+    if config.server.host.trim().is_empty() {
+        fail("Server host is empty", &mut failures);
+    } else {
+        pass(&format!("Server host configured: {}", config.server.host));
+    }
+
+    if config.server.port == 0 {
+        fail("Server port cannot be 0", &mut failures);
+    } else {
+        pass(&format!(
+            "Internal server port configured: {}",
+            config.server.port
+        ));
+    }
+
+    if config.http.enabled {
+        if config.http.port == 0 {
+            fail("HTTP listener port cannot be 0", &mut failures);
+        } else {
+            pass(&format!(
+                "HTTP listener enabled on port {}",
+                config.http.port
+            ));
+        }
+    } else {
+        warn("HTTP listener is disabled", &mut warnings);
+    }
+
+    if config.tls.enabled {
+        if config.tls.port == 0 {
+            fail("HTTPS listener port cannot be 0", &mut failures);
+        } else {
+            pass(&format!(
+                "HTTPS/TLS listener enabled on port {}",
+                config.tls.port
+            ));
+        }
+
+        if std::path::Path::new(&config.tls.cert).is_file() {
+            pass(&format!("TLS certificate readable: {}", config.tls.cert));
+        } else {
+            fail(
+                &format!("TLS certificate missing: {}", config.tls.cert),
+                &mut failures,
+            );
+        }
+
+        if std::path::Path::new(&config.tls.key).is_file() {
+            pass(&format!("TLS private key readable: {}", config.tls.key));
+        } else {
+            fail(
+                &format!("TLS private key missing: {}", config.tls.key),
+                &mut failures,
+            );
+        }
+    } else {
+        warn("TLS is disabled", &mut warnings);
+    }
+
+    if config.proxy.enabled {
+        if config.proxy.upstream.starts_with("http://")
+            || config.proxy.upstream.starts_with("https://")
+        {
+            pass(&format!(
+                "Default upstream valid: {}",
+                config.proxy.upstream
+            ));
+        } else {
+            fail(
+                &format!(
+                    "Default upstream is not HTTP/HTTPS: {}",
+                    config.proxy.upstream
+                ),
+                &mut failures,
+            );
+        }
+    } else {
+        warn("Reverse proxy is disabled", &mut warnings);
+    }
+
+    if config.routes.is_empty() {
+        warn("No host routes configured", &mut warnings);
+    } else {
+        pass(&format!("{} route(s) configured", config.routes.len()));
+
+        let mut hosts = std::collections::HashSet::<String>::new();
+
+        for route in &config.routes {
+            let host = route.host.trim().trim_end_matches('.').to_lowercase();
+
+            if host.is_empty() {
+                fail("Route contains an empty host", &mut failures);
+            } else if !hosts.insert(host.clone()) {
+                fail(&format!("Duplicate route host: {host}"), &mut failures);
+            }
+
+            if !(route.upstream.starts_with("http://") || route.upstream.starts_with("https://")) {
+                fail(
+                    &format!(
+                        "Invalid upstream for route {}: {}",
+                        route.host, route.upstream
+                    ),
+                    &mut failures,
+                );
+            }
+        }
+
+        if failures == 0 {
+            pass("Route definitions are structurally valid");
+        }
+    }
+
+    if config.cache.enabled {
+        if config.cache.ttl_seconds == 0 {
+            warn("Cache enabled with TTL 0 seconds", &mut warnings);
+        } else {
+            pass(&format!(
+                "Cache enabled with TTL {}s",
+                config.cache.ttl_seconds
+            ));
+        }
+    } else {
+        warn("Cache is disabled", &mut warnings);
+    }
+
+    if config.acme.enabled {
+        match config.acme.environment.as_str() {
+            "staging" => {
+                pass("ACME enabled in staging environment");
+            }
+
+            "production" => {
+                pass("ACME enabled in production environment");
+            }
+
+            other => {
+                fail(&format!("Unknown ACME environment: {other}"), &mut failures);
+            }
+        }
+
+        if config.acme.email.trim().is_empty() {
+            warn("ACME contact email is not configured", &mut warnings);
+        } else {
+            pass("ACME contact email configured");
+        }
+
+        if config.acme.challenge == "http-01" {
+            pass("ACME HTTP-01 challenge configured");
+        } else {
+            warn(
+                &format!(
+                    "ACME challenge is '{}'; HTTP-01 is currently expected",
+                    config.acme.challenge
+                ),
+                &mut warnings,
+            );
+        }
+
+        if config.acme.cache_dir.trim().is_empty() {
+            fail("ACME cache directory is empty", &mut failures);
+        } else {
+            pass(&format!(
+                "ACME cache directory configured: {}",
+                config.acme.cache_dir
+            ));
+        }
+    } else {
+        warn("ACME is disabled", &mut warnings);
+    }
+
+    if config.public_node.enabled {
+        pass("Public-node mode enabled");
+
+        if config.public_node.primary_domain.trim().is_empty() {
+            fail("Public-node primary domain is missing", &mut failures);
+        } else {
+            pass(&format!(
+                "Primary public domain configured: {}",
+                config.public_node.primary_domain
+            ));
+        }
+
+        if config.public_node.expected_ipv4.trim().is_empty() {
+            warn("Expected public IPv4 is not configured", &mut warnings);
+        } else {
+            pass(&format!(
+                "Expected public IPv4 configured: {}",
+                config.public_node.expected_ipv4
+            ));
+        }
+    } else {
+        warn("Public-node mode is disabled", &mut warnings);
+    }
+
+    if config.deployment.require_public_ports {
+        if config.http.port == 80 && config.tls.port == 443 {
+            pass("Required public ports are HTTP 80 / HTTPS 443");
+        } else {
+            fail(
+                &format!(
+                    "Public deployment requires ports 80/443, configured {}/{}",
+                    config.http.port, config.tls.port
+                ),
+                &mut failures,
+            );
+        }
+    }
+
+    if config.deployment.require_public_domains
+        && config.public_node.primary_domain.trim().is_empty()
+    {
+        fail(
+            "Deployment requires a public domain but none is configured",
+            &mut failures,
+        );
+    }
+
+    println!();
+    println!("────────────────────────────────");
+
+    if failures > 0 {
+        println!("Result: FAIL ({failures} failure(s), {warnings} warning(s))");
+
+        Err(format!("Doctor found {failures} failure(s)"))
+    } else if warnings > 0 {
+        println!("Result: WARN ({warnings} warning(s))");
+
+        Ok(())
+    } else {
+        println!("Result: PASS");
+        Ok(())
     }
 }
 
