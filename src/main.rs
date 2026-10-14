@@ -44,6 +44,14 @@ enum ConfigCommands {
 }
 
 #[derive(Subcommand)]
+enum NodeCommands {
+    Status {
+        #[arg(long, default_value = "monceda-edge.toml")]
+        config: String,
+    },
+}
+
+#[derive(Subcommand)]
 enum Commands {
     Serve {
         #[arg(long)]
@@ -59,6 +67,11 @@ enum Commands {
     Status {
         #[arg(long, default_value = "monceda-edge.toml")]
         config: String,
+    },
+
+    Node {
+        #[command(subcommand)]
+        command: NodeCommands,
     },
 
     Doctor {
@@ -391,6 +404,10 @@ async fn main() {
         Some(Commands::Serve { host, port, config }) => serve(&config, host, port).await,
 
         Some(Commands::Status { config }) => status(&config).await,
+
+        Some(Commands::Node { command }) => match command {
+            NodeCommands::Status { config } => status(&config).await,
+        },
 
         Some(Commands::Doctor { config }) => doctor(&config),
 

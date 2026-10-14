@@ -137,3 +137,52 @@ fn config_show_json_outputs_valid_json() {
 
     assert!(value["routes"].is_array());
 }
+
+#[test]
+fn help_lists_node_command() {
+    let output = Command::new(edge_bin())
+        .arg("--help")
+        .output()
+        .expect("failed to run help");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(stdout.contains("node"));
+}
+
+#[test]
+fn node_help_lists_status() {
+    let output = Command::new(edge_bin())
+        .args(["node", "--help"])
+        .output()
+        .expect("failed to run node help");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(stdout.contains("status"));
+}
+
+#[test]
+fn node_status_handles_unreachable_node_cleanly() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let config = format!("{root}/monceda-edge.toml");
+
+    let output = Command::new(edge_bin())
+        .args(["node", "status", "--config", &config])
+        .output()
+        .expect("failed to run node status");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success()
+            || stderr.contains("Monceda Edge is not reachable")
+            || stdout.contains("Monceda Edge is running."),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
+}
