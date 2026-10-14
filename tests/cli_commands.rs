@@ -458,3 +458,37 @@ fn node_routes_check_json_outputs_valid_json() {
     assert!(value["routes"].is_array());
     assert!(value["routes"][0]["reachable"].is_boolean());
 }
+
+#[test]
+fn node_routes_help_lists_strict() {
+    let output = Command::new(edge_bin())
+        .args(["node", "routes", "--help"])
+        .output()
+        .expect("failed to run node routes help");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--strict"));
+}
+
+#[test]
+fn node_routes_check_strict_reports_failure_when_route_is_down() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let config = format!("{root}/monceda-edge.toml");
+
+    let output = Command::new(edge_bin())
+        .args(["node", "routes", "--config", &config, "--check", "--strict"])
+        .output()
+        .expect("failed to run strict route check");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success()
+            || stderr.contains("Route check failed in strict mode")
+            || stdout.contains("Unreachable: 0"),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
+}

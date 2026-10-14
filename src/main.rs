@@ -81,6 +81,9 @@ enum NodeCommands {
 
         #[arg(long)]
         check: bool,
+
+        #[arg(long)]
+        strict: bool,
     },
 }
 
@@ -451,7 +454,8 @@ async fn main() {
                 config,
                 json,
                 check,
-            } => node_routes(&config, json, check).await,
+                strict,
+            } => node_routes(&config, json, check, strict).await,
         },
 
         Some(Commands::Doctor { config }) => doctor(&config),
@@ -2520,7 +2524,12 @@ fn node_info(config_path: &str, json_output: bool) -> Result<(), String> {
     Ok(())
 }
 
-async fn node_routes(config_path: &str, json_output: bool, check: bool) -> Result<(), String> {
+async fn node_routes(
+    config_path: &str,
+    json_output: bool,
+    check: bool,
+    strict: bool,
+) -> Result<(), String> {
     let config = load_config(config_path)?;
 
     if !check {
@@ -2616,6 +2625,12 @@ async fn node_routes(config_path: &str, json_output: bool, check: bool) -> Resul
                 .map_err(|error| format!("Unable to serialize route checks: {error}"))?
         );
 
+        if strict && unreachable > 0 {
+            return Err(format!(
+                "Route check failed in strict mode: {unreachable} unreachable route(s)"
+            ));
+        }
+
         return Ok(());
     }
 
@@ -2657,6 +2672,12 @@ async fn node_routes(config_path: &str, json_output: bool, check: bool) -> Resul
     println!();
     println!("Healthy:     {healthy}");
     println!("Unreachable: {unreachable}");
+
+    if strict && unreachable > 0 {
+        return Err(format!(
+            "Route check failed in strict mode: {unreachable} unreachable route(s)"
+        ));
+    }
 
     Ok(())
 }
