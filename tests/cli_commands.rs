@@ -418,3 +418,43 @@ fn node_routes_json_outputs_valid_json() {
     assert_eq!(value["routes"][0]["host"], "dashboard.local");
     assert_eq!(value["routes"][0]["upstream"], "http://127.0.0.1:3000");
 }
+
+#[test]
+fn node_routes_help_lists_check() {
+    let output = Command::new(edge_bin())
+        .args(["node", "routes", "--help"])
+        .output()
+        .expect("failed to run node routes help");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--check"));
+}
+
+#[test]
+fn node_routes_check_json_outputs_valid_json() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let config = format!("{root}/monceda-edge.toml");
+
+    let output = Command::new(edge_bin())
+        .args(["node", "routes", "--config", &config, "--check", "--json"])
+        .output()
+        .expect("failed to run node routes check json");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let value: serde_json::Value = serde_json::from_str(&stdout).expect("invalid route check JSON");
+
+    assert_eq!(value["count"], 2);
+    assert!(value["healthy"].is_number());
+    assert!(value["unreachable"].is_number());
+    assert!(value["routes"].is_array());
+    assert!(value["routes"][0]["reachable"].is_boolean());
+}

@@ -78,6 +78,9 @@ enum NodeCommands {
 
         #[arg(long)]
         json: bool,
+
+        #[arg(long)]
+        check: bool,
     },
 }
 
@@ -444,7 +447,11 @@ async fn main() {
                 strict,
             } => node_check(&config, json, strict).await,
 
-            NodeCommands::Routes { config, json } => node_routes(&config, json),
+            NodeCommands::Routes {
+                config,
+                json,
+                check,
+            } => node_routes(&config, json, check).await,
         },
 
         Some(Commands::Doctor { config }) => doctor(&config),
@@ -2513,30 +2520,100 @@ fn node_info(config_path: &str, json_output: bool) -> Result<(), String> {
     Ok(())
 }
 
-fn node_routes(config_path: &str, json_output: bool) -> Result<(), String> {
+async fn node_routes(config_path: &str, json_output: bool, check: bool) -> Result<(), String> {
     let config = load_config(config_path)?;
 
-    if json_output {
-        let routes: Vec<serde_json::Value> = config
-            .routes
-            .iter()
-            .map(|route| {
-                serde_json::json!({
-                    "host": route.host,
-                    "upstream": route.upstream
+    if !check {
+        if json_output {
+            let routes: Vec<serde_json::Value> = config
+                .routes
+                .iter()
+                .map(|route| {
+                    serde_json::json!({
+                        "host": route.host,
+                        "upstream": route.upstream
+                    })
                 })
-            })
-            .collect();
+                .collect();
 
+            let value = serde_json::json!({
+                "count": routes.len(),
+                "routes": routes
+            });
+
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&value)
+                    .map_err(|error| format!("Unable to serialize node routes: {error}"))?
+            );
+
+            return Ok(());
+        }
+
+        println!("Monceda Edge Node Routes");
+        println!("────────────────────────");
+        println!("Routes: {}", config.routes.len());
+
+        if config.routes.is_empty() {
+            println!("No host routes configured.");
+            return Ok(());
+        }
+
+        println!();
+
+        for (index, route) in config.routes.iter().enumerate() {
+            println!("{}. {} -> {}", index + 1, route.host, route.upstream);
+        }
+
+        return Ok(());
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(3))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|error| format!("Unable to create route check client: {error}"))?;
+
+    let mut checked_routes = Vec::new();
+    let mut healthy = 0usize;
+
+    for route in &config.routes {
+        let result = client.get(&route.upstream).send().await;
+
+        let (reachable, status) = match result {
+            Ok(response) => {
+                let code = response.status();
+                (code.is_success(), Some(code.as_u16()))
+            }
+            Err(_) => (false, None),
+        };
+
+        if reachable {
+            healthy += 1;
+        }
+
+        checked_routes.push(serde_json::json!({
+            "host": route.host,
+            "upstream": route.upstream,
+            "reachable": reachable,
+            "http_status": status
+        }));
+    }
+
+    let unreachable = checked_routes.len().saturating_sub(healthy);
+
+    if json_output {
         let value = serde_json::json!({
-            "count": routes.len(),
-            "routes": routes
+            "count": checked_routes.len(),
+            "healthy": healthy,
+            "unreachable": unreachable,
+            "routes": checked_routes
         });
 
         println!(
             "{}",
             serde_json::to_string_pretty(&value)
-                .map_err(|error| format!("Unable to serialize node routes: {error}"))?
+                .map_err(|error| format!("Unable to serialize route checks: {error}"))?
         );
 
         return Ok(());
@@ -2544,18 +2621,42 @@ fn node_routes(config_path: &str, json_output: bool) -> Result<(), String> {
 
     println!("Monceda Edge Node Routes");
     println!("────────────────────────");
-    println!("Routes: {}", config.routes.len());
+    println!("Routes: {}", checked_routes.len());
 
-    if config.routes.is_empty() {
+    if checked_routes.is_empty() {
         println!("No host routes configured.");
         return Ok(());
     }
 
     println!();
 
-    for (index, route) in config.routes.iter().enumerate() {
-        println!("{}. {} -> {}", index + 1, route.host, route.upstream);
+    for (index, route) in checked_routes.iter().enumerate() {
+        let host = route["host"].as_str().unwrap_or("");
+        let upstream = route["upstream"].as_str().unwrap_or("");
+        let reachable = route["reachable"].as_bool().unwrap_or(false);
+
+        let state = if reachable { "UP" } else { "DOWN" };
+
+        match route["http_status"].as_u64() {
+            Some(status) => {
+                println!(
+                    "{}. {} -> {}  [{} HTTP {}]",
+                    index + 1,
+                    host,
+                    upstream,
+                    state,
+                    status
+                );
+            }
+            None => {
+                println!("{}. {} -> {}  [{}]", index + 1, host, upstream, state);
+            }
+        }
     }
+
+    println!();
+    println!("Healthy:     {healthy}");
+    println!("Unreachable: {unreachable}");
 
     Ok(())
 }
