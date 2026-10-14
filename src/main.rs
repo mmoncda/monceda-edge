@@ -2352,9 +2352,24 @@ async fn status(config_path: &str) -> Result<(), String> {
         other => other,
     };
 
-    let url = format!("http://{}:{}/_edge/health", host, config.server.port);
+    let (scheme, port) = if config.tls.enabled {
+        ("https", config.tls.port)
+    } else if config.http.enabled {
+        ("http", config.http.port)
+    } else {
+        ("http", config.server.port)
+    };
 
-    match reqwest::get(&url).await {
+    let url = format!("{scheme}://{host}:{port}/_edge/health");
+
+    let is_local = matches!(host, "127.0.0.1" | "localhost" | "::1");
+
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(is_local && scheme == "https")
+        .build()
+        .map_err(|error| format!("Unable to create status client: {error}"))?;
+
+    match client.get(&url).send().await {
         Ok(response) if response.status().is_success() => {
             let body = response
                 .text()
@@ -2362,12 +2377,13 @@ async fn status(config_path: &str) -> Result<(), String> {
                 .unwrap_or_else(|_| "running".to_string());
 
             println!("Monceda Edge is running.");
+            println!("Endpoint: {url}");
             println!("{body}");
             Ok(())
         }
 
         Ok(response) => Err(format!(
-            "Monceda Edge responded with HTTP {}",
+            "Monceda Edge responded with HTTP {} at {url}",
             response.status()
         )),
 
