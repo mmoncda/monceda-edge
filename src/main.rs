@@ -53,6 +53,9 @@ enum NodeCommands {
     Info {
         #[arg(long, default_value = "monceda-edge.toml")]
         config: String,
+
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -412,7 +415,7 @@ async fn main() {
 
         Some(Commands::Node { command }) => match command {
             NodeCommands::Status { config } => status(&config).await,
-            NodeCommands::Info { config } => node_info(&config),
+            NodeCommands::Info { config, json } => node_info(&config, json),
         },
 
         Some(Commands::Doctor { config }) => doctor(&config),
@@ -2350,7 +2353,7 @@ fn load_config(path: &str) -> Result<Config, String> {
     }
 }
 
-fn node_info(config_path: &str) -> Result<(), String> {
+fn node_info(config_path: &str, json_output: bool) -> Result<(), String> {
     let config = load_config(config_path)?;
 
     let host = match config.server.host.as_str() {
@@ -2372,14 +2375,60 @@ fn node_info(config_path: &str) -> Result<(), String> {
         "static"
     };
 
+    let endpoint = format!("{scheme}://{host}:{port}");
+
+    if json_output {
+        let value = serde_json::json!({
+            "version": VERSION,
+            "deployment_mode": config.deployment.mode,
+            "mode": mode,
+            "endpoint": endpoint,
+            "server": {
+                "host": config.server.host,
+                "port": config.server.port
+            },
+            "http": {
+                "enabled": config.http.enabled,
+                "port": config.http.port
+            },
+            "tls": {
+                "enabled": config.tls.enabled,
+                "port": config.tls.port
+            },
+            "proxy": {
+                "enabled": config.proxy.enabled,
+                "upstream": config.proxy.upstream
+            },
+            "cache": {
+                "enabled": config.cache.enabled,
+                "ttl_seconds": config.cache.ttl_seconds
+            },
+            "routes": config.routes.len(),
+            "public_node": {
+                "enabled": config.public_node.enabled,
+                "primary_domain": config.public_node.primary_domain,
+                "expected_ipv4": config.public_node.expected_ipv4
+            }
+        });
+
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&value)
+                .map_err(|error| format!("Unable to serialize node info: {error}"))?
+        );
+
+        return Ok(());
+    }
+
     println!("Monceda Edge Node Information");
     println!("────────────────────────────");
     println!("Version:          {VERSION}");
     println!("Deployment mode:  {}", config.deployment.mode);
     println!("Mode:             {mode}");
-    println!("Endpoint:         {scheme}://{host}:{port}");
+    println!("Endpoint:         {endpoint}");
     println!("Server host:      {}", config.server.host);
     println!("Server port:      {}", config.server.port);
+
     println!(
         "HTTP:             {}",
         if config.http.enabled {
@@ -2388,6 +2437,7 @@ fn node_info(config_path: &str) -> Result<(), String> {
             "disabled".to_string()
         }
     );
+
     println!(
         "TLS:              {}",
         if config.tls.enabled {
@@ -2396,6 +2446,7 @@ fn node_info(config_path: &str) -> Result<(), String> {
             "disabled".to_string()
         }
     );
+
     println!(
         "Proxy:            {}",
         if config.proxy.enabled {
@@ -2404,6 +2455,7 @@ fn node_info(config_path: &str) -> Result<(), String> {
             "disabled".to_string()
         }
     );
+
     println!(
         "Cache:            {}",
         if config.cache.enabled {
@@ -2412,7 +2464,9 @@ fn node_info(config_path: &str) -> Result<(), String> {
             "disabled"
         }
     );
+
     println!("Routes:           {}", config.routes.len());
+
     println!(
         "Public node:      {}",
         if config.public_node.enabled {

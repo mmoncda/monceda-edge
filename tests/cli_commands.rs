@@ -229,3 +229,32 @@ fn node_info_outputs_effective_node_configuration() {
     assert!(stdout.contains("Proxy:"));
     assert!(stdout.contains("Public node:"));
 }
+
+#[test]
+fn node_info_json_outputs_valid_json() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let config = format!("{root}/monceda-edge.toml");
+
+    let output = Command::new(edge_bin())
+        .args(["node", "info", "--config", &config, "--json"])
+        .output()
+        .expect("failed to run node info json");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let value: serde_json::Value = serde_json::from_str(&stdout).expect("invalid node info JSON");
+
+    assert_eq!(value["version"], "0.9.0");
+    assert_eq!(value["deployment_mode"], "development");
+    assert_eq!(value["mode"], "reverse-proxy");
+    assert_eq!(value["endpoint"], "https://127.0.0.1:8443");
+    assert_eq!(value["http"]["port"], 8080);
+    assert_eq!(value["tls"]["port"], 8443);
+    assert_eq!(value["routes"], 2);
+}
