@@ -258,3 +258,27 @@ fn node_info_json_outputs_valid_json() {
     assert_eq!(value["tls"]["port"], 8443);
     assert_eq!(value["routes"], 2);
 }
+
+#[test]
+fn node_status_json_outputs_valid_json() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let config = format!("{root}/monceda-edge.toml");
+
+    let output = Command::new(edge_bin())
+        .args(["node", "status", "--config", &config, "--json"])
+        .output()
+        .expect("failed to run node status json");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let value: serde_json::Value = serde_json::from_str(&stdout).expect("invalid node status JSON");
+
+    assert!(value["reachable"].is_boolean());
+    assert!(value["endpoint"].is_string());
+}

@@ -48,6 +48,9 @@ enum NodeCommands {
     Status {
         #[arg(long, default_value = "monceda-edge.toml")]
         config: String,
+
+        #[arg(long)]
+        json: bool,
     },
 
     Info {
@@ -411,10 +414,10 @@ async fn main() {
     let result = match cli.command {
         Some(Commands::Serve { host, port, config }) => serve(&config, host, port).await,
 
-        Some(Commands::Status { config }) => status(&config).await,
+        Some(Commands::Status { config }) => status(&config, false).await,
 
         Some(Commands::Node { command }) => match command {
-            NodeCommands::Status { config } => status(&config).await,
+            NodeCommands::Status { config, json } => status(&config, json).await,
             NodeCommands::Info { config, json } => node_info(&config, json),
         },
 
@@ -2484,7 +2487,7 @@ fn node_info(config_path: &str, json_output: bool) -> Result<(), String> {
     Ok(())
 }
 
-async fn status(config_path: &str) -> Result<(), String> {
+async fn status(config_path: &str, json_output: bool) -> Result<(), String> {
     let config = load_config(config_path)?;
 
     let host = match config.server.host.as_str() {
@@ -2516,17 +2519,67 @@ async fn status(config_path: &str) -> Result<(), String> {
                 .await
                 .unwrap_or_else(|_| "running".to_string());
 
+            if json_output {
+                let health = serde_json::from_str::<serde_json::Value>(&body)
+                    .unwrap_or_else(|_| serde_json::json!({ "raw": body }));
+
+                let value = serde_json::json!({
+                    "reachable": true,
+                    "endpoint": url,
+                    "health": health
+                });
+
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&value)
+                        .map_err(|error| format!("Unable to serialize node status: {error}"))?
+                );
+
+                return Ok(());
+            }
+
             println!("Monceda Edge is running.");
             println!("Endpoint: {url}");
             println!("{body}");
             Ok(())
         }
 
-        Ok(response) => Err(format!(
-            "Monceda Edge responded with HTTP {} at {url}",
-            response.status()
-        )),
+        Ok(response) => {
+            if json_output {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "reachable": false,
+                        "endpoint": url,
+                        "http_status": response.status().as_u16()
+                    }))
+                    .map_err(|error| format!("Unable to serialize node status: {error}"))?
+                );
 
-        Err(_) => Err(format!("Monceda Edge is not reachable at {url}")),
+                return Ok(());
+            }
+
+            Err(format!(
+                "Monceda Edge responded with HTTP {} at {url}",
+                response.status()
+            ))
+        }
+
+        Err(_) => {
+            if json_output {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "reachable": false,
+                        "endpoint": url
+                    }))
+                    .map_err(|error| format!("Unable to serialize node status: {error}"))?
+                );
+
+                return Ok(());
+            }
+
+            Err(format!("Monceda Edge is not reachable at {url}"))
+        }
     }
 }
