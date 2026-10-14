@@ -60,6 +60,14 @@ enum NodeCommands {
         #[arg(long)]
         json: bool,
     },
+
+    Check {
+        #[arg(long, default_value = "monceda-edge.toml")]
+        config: String,
+
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -419,6 +427,7 @@ async fn main() {
         Some(Commands::Node { command }) => match command {
             NodeCommands::Status { config, json } => status(&config, json).await,
             NodeCommands::Info { config, json } => node_info(&config, json),
+            NodeCommands::Check { config, json } => node_check(&config, json).await,
         },
 
         Some(Commands::Doctor { config }) => doctor(&config),
@@ -2483,6 +2492,121 @@ fn node_info(config_path: &str, json_output: bool) -> Result<(), String> {
         println!("Primary domain:   {}", config.public_node.primary_domain);
         println!("Expected IPv4:    {}", config.public_node.expected_ipv4);
     }
+
+    Ok(())
+}
+
+async fn node_check(config_path: &str, json_output: bool) -> Result<(), String> {
+    let config = load_config(config_path)?;
+
+    let host = match config.server.host.as_str() {
+        "0.0.0.0" | "::" => "127.0.0.1",
+        other => other,
+    };
+
+    let (scheme, port) = if config.tls.enabled {
+        ("https", config.tls.port)
+    } else if config.http.enabled {
+        ("http", config.http.port)
+    } else {
+        ("http", config.server.port)
+    };
+
+    let endpoint = format!("{scheme}://{host}:{port}/_edge/health");
+
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(
+            matches!(host, "127.0.0.1" | "localhost" | "::1") && scheme == "https",
+        )
+        .build()
+        .map_err(|error| format!("Unable to create node check client: {error}"))?;
+
+    let response = client.get(&endpoint).send().await;
+
+    let (reachable, http_status) = match response {
+        Ok(response) => (
+            response.status().is_success(),
+            Some(response.status().as_u16()),
+        ),
+        Err(_) => (false, None),
+    };
+
+    let mode = if config.proxy.enabled {
+        "reverse-proxy"
+    } else {
+        "static"
+    };
+
+    if json_output {
+        let value = serde_json::json!({
+            "result": if reachable { "PASS" } else { "WARN" },
+            "version": VERSION,
+            "deployment_mode": config.deployment.mode,
+            "mode": mode,
+            "endpoint": endpoint,
+            "reachable": reachable,
+            "http_status": http_status,
+            "proxy": {
+                "enabled": config.proxy.enabled,
+                "upstream": config.proxy.upstream
+            },
+            "tls": {
+                "enabled": config.tls.enabled,
+                "port": config.tls.port
+            },
+            "http": {
+                "enabled": config.http.enabled,
+                "port": config.http.port
+            },
+            "routes": config.routes.len(),
+            "public_node": {
+                "enabled": config.public_node.enabled,
+                "primary_domain": config.public_node.primary_domain
+            }
+        });
+
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&value)
+                .map_err(|error| format!("Unable to serialize node check: {error}"))?
+        );
+
+        return Ok(());
+    }
+
+    println!("Monceda Edge Node Check");
+    println!("───────────────────────");
+    println!("Version:          {VERSION}");
+    println!("Deployment mode:  {}", config.deployment.mode);
+    println!("Mode:             {mode}");
+    println!("Endpoint:         {endpoint}");
+    println!("Reachable:        {}", if reachable { "yes" } else { "no" });
+
+    if let Some(status) = http_status {
+        println!("HTTP status:      {status}");
+    }
+
+    println!(
+        "Proxy:            {}",
+        if config.proxy.enabled {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    );
+    println!("Routes:           {}", config.routes.len());
+    println!(
+        "Public node:      {}",
+        if config.public_node.enabled {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    );
+    println!(
+        "Result:           {}",
+        if reachable { "PASS" } else { "WARN" }
+    );
 
     Ok(())
 }

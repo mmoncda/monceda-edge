@@ -282,3 +282,42 @@ fn node_status_json_outputs_valid_json() {
     assert!(value["reachable"].is_boolean());
     assert!(value["endpoint"].is_string());
 }
+
+#[test]
+fn node_help_lists_check() {
+    let output = Command::new(edge_bin())
+        .args(["node", "--help"])
+        .output()
+        .expect("failed to run node help");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("check"));
+}
+
+#[test]
+fn node_check_json_outputs_valid_json() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let config = format!("{root}/monceda-edge.toml");
+
+    let output = Command::new(edge_bin())
+        .args(["node", "check", "--config", &config, "--json"])
+        .output()
+        .expect("failed to run node check json");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let value: serde_json::Value = serde_json::from_str(&stdout).expect("invalid node check JSON");
+
+    assert!(value["result"] == "PASS" || value["result"] == "WARN");
+    assert_eq!(value["version"], env!("CARGO_PKG_VERSION"));
+    assert!(value["endpoint"].is_string());
+    assert!(value["reachable"].is_boolean());
+    assert!(value["routes"].is_number());
+}
