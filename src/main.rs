@@ -71,6 +71,14 @@ enum NodeCommands {
         #[arg(long)]
         strict: bool,
     },
+
+    Routes {
+        #[arg(long, default_value = "monceda-edge.toml")]
+        config: String,
+
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -435,6 +443,8 @@ async fn main() {
                 json,
                 strict,
             } => node_check(&config, json, strict).await,
+
+            NodeCommands::Routes { config, json } => node_routes(&config, json),
         },
 
         Some(Commands::Doctor { config }) => doctor(&config),
@@ -2498,6 +2508,53 @@ fn node_info(config_path: &str, json_output: bool) -> Result<(), String> {
     if config.public_node.enabled {
         println!("Primary domain:   {}", config.public_node.primary_domain);
         println!("Expected IPv4:    {}", config.public_node.expected_ipv4);
+    }
+
+    Ok(())
+}
+
+fn node_routes(config_path: &str, json_output: bool) -> Result<(), String> {
+    let config = load_config(config_path)?;
+
+    if json_output {
+        let routes: Vec<serde_json::Value> = config
+            .routes
+            .iter()
+            .map(|route| {
+                serde_json::json!({
+                    "host": route.host,
+                    "upstream": route.upstream
+                })
+            })
+            .collect();
+
+        let value = serde_json::json!({
+            "count": routes.len(),
+            "routes": routes
+        });
+
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&value)
+                .map_err(|error| format!("Unable to serialize node routes: {error}"))?
+        );
+
+        return Ok(());
+    }
+
+    println!("Monceda Edge Node Routes");
+    println!("────────────────────────");
+    println!("Routes: {}", config.routes.len());
+
+    if config.routes.is_empty() {
+        println!("No host routes configured.");
+        return Ok(());
+    }
+
+    println!();
+
+    for (index, route) in config.routes.iter().enumerate() {
+        println!("{}. {} -> {}", index + 1, route.host, route.upstream);
     }
 
     Ok(())

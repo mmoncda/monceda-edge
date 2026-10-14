@@ -355,3 +355,66 @@ fn node_check_strict_succeeds_when_node_is_reachable() {
         "stdout: {stdout}\nstderr: {stderr}"
     );
 }
+
+#[test]
+fn node_help_lists_routes() {
+    let output = Command::new(edge_bin())
+        .args(["node", "--help"])
+        .output()
+        .expect("failed to run node help");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("routes"));
+}
+
+#[test]
+fn node_routes_outputs_configured_routes() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let config = format!("{root}/monceda-edge.toml");
+
+    let output = Command::new(edge_bin())
+        .args(["node", "routes", "--config", &config])
+        .output()
+        .expect("failed to run node routes");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(stdout.contains("Monceda Edge Node Routes"));
+    assert!(stdout.contains("dashboard.local"));
+    assert!(stdout.contains("http://127.0.0.1:3000"));
+    assert!(stdout.contains("app.local"));
+    assert!(stdout.contains("http://127.0.0.1:4000"));
+}
+
+#[test]
+fn node_routes_json_outputs_valid_json() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let config = format!("{root}/monceda-edge.toml");
+
+    let output = Command::new(edge_bin())
+        .args(["node", "routes", "--config", &config, "--json"])
+        .output()
+        .expect("failed to run node routes json");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let value: serde_json::Value = serde_json::from_str(&stdout).expect("invalid node routes JSON");
+
+    assert_eq!(value["count"], 2);
+    assert!(value["routes"].is_array());
+    assert_eq!(value["routes"][0]["host"], "dashboard.local");
+    assert_eq!(value["routes"][0]["upstream"], "http://127.0.0.1:3000");
+}
