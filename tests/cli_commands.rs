@@ -250,7 +250,7 @@ fn node_info_json_outputs_valid_json() {
 
     let value: serde_json::Value = serde_json::from_str(&stdout).expect("invalid node info JSON");
 
-    assert_eq!(value["version"], "0.9.0");
+    assert_eq!(value["version"], env!("CARGO_PKG_VERSION"));
     assert_eq!(value["deployment_mode"], "development");
     assert_eq!(value["mode"], "reverse-proxy");
     assert_eq!(value["endpoint"], "https://127.0.0.1:8443");
