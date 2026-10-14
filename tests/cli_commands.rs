@@ -492,3 +492,78 @@ fn node_routes_check_strict_reports_failure_when_route_is_down() {
         "stdout: {stdout}\nstderr: {stderr}"
     );
 }
+
+#[test]
+fn node_routes_help_lists_host() {
+    let output = Command::new(edge_bin())
+        .args(["node", "routes", "--help"])
+        .output()
+        .expect("failed to run node routes help");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--host"));
+}
+
+#[test]
+fn node_routes_filters_by_host() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let config = format!("{root}/monceda-edge.toml");
+
+    let output = Command::new(edge_bin())
+        .args([
+            "node",
+            "routes",
+            "--config",
+            &config,
+            "--host",
+            "dashboard.local",
+        ])
+        .output()
+        .expect("failed to run filtered node routes");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(stdout.contains("Routes: 1"));
+    assert!(stdout.contains("dashboard.local"));
+    assert!(!stdout.contains("app.local"));
+}
+
+#[test]
+fn node_routes_host_json_outputs_single_route() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let config = format!("{root}/monceda-edge.toml");
+
+    let output = Command::new(edge_bin())
+        .args([
+            "node",
+            "routes",
+            "--config",
+            &config,
+            "--host",
+            "dashboard.local",
+            "--json",
+        ])
+        .output()
+        .expect("failed to run filtered node routes json");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let value: serde_json::Value =
+        serde_json::from_str(&stdout).expect("invalid filtered routes JSON");
+
+    assert_eq!(value["count"], 1);
+    assert_eq!(value["routes"][0]["host"], "dashboard.local");
+}

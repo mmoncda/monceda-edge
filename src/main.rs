@@ -84,6 +84,9 @@ enum NodeCommands {
 
         #[arg(long)]
         strict: bool,
+
+        #[arg(long)]
+        host: Option<String>,
     },
 }
 
@@ -455,7 +458,8 @@ async fn main() {
                 json,
                 check,
                 strict,
-            } => node_routes(&config, json, check, strict).await,
+                host,
+            } => node_routes(&config, json, check, strict, host.as_deref()).await,
         },
 
         Some(Commands::Doctor { config }) => doctor(&config),
@@ -2529,13 +2533,29 @@ async fn node_routes(
     json_output: bool,
     check: bool,
     strict: bool,
+    host_filter: Option<&str>,
 ) -> Result<(), String> {
     let config = load_config(config_path)?;
 
+    let routes: Vec<_> = config
+        .routes
+        .iter()
+        .filter(|route| {
+            host_filter
+                .map(|host| route.host.eq_ignore_ascii_case(host))
+                .unwrap_or(true)
+        })
+        .collect();
+
+    if let Some(host) = host_filter {
+        if routes.is_empty() {
+            return Err(format!("No route configured for host {host}"));
+        }
+    }
+
     if !check {
         if json_output {
-            let routes: Vec<serde_json::Value> = config
-                .routes
+            let routes: Vec<serde_json::Value> = routes
                 .iter()
                 .map(|route| {
                     serde_json::json!({
@@ -2561,16 +2581,16 @@ async fn node_routes(
 
         println!("Monceda Edge Node Routes");
         println!("────────────────────────");
-        println!("Routes: {}", config.routes.len());
+        println!("Routes: {}", routes.len());
 
-        if config.routes.is_empty() {
+        if routes.is_empty() {
             println!("No host routes configured.");
             return Ok(());
         }
 
         println!();
 
-        for (index, route) in config.routes.iter().enumerate() {
+        for (index, route) in routes.iter().enumerate() {
             println!("{}. {} -> {}", index + 1, route.host, route.upstream);
         }
 
@@ -2586,7 +2606,7 @@ async fn node_routes(
     let mut checked_routes = Vec::new();
     let mut healthy = 0usize;
 
-    for route in &config.routes {
+    for route in &routes {
         let result = client.get(&route.upstream).send().await;
 
         let (reachable, status) = match result {
