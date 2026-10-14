@@ -49,6 +49,11 @@ enum NodeCommands {
         #[arg(long, default_value = "monceda-edge.toml")]
         config: String,
     },
+
+    Info {
+        #[arg(long, default_value = "monceda-edge.toml")]
+        config: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -407,6 +412,7 @@ async fn main() {
 
         Some(Commands::Node { command }) => match command {
             NodeCommands::Status { config } => status(&config).await,
+            NodeCommands::Info { config } => node_info(&config),
         },
 
         Some(Commands::Doctor { config }) => doctor(&config),
@@ -2342,6 +2348,86 @@ fn load_config(path: &str) -> Result<Config, String> {
 
         Err(error) => Err(format!("Unable to read config {path}: {error}")),
     }
+}
+
+fn node_info(config_path: &str) -> Result<(), String> {
+    let config = load_config(config_path)?;
+
+    let host = match config.server.host.as_str() {
+        "0.0.0.0" | "::" => "127.0.0.1",
+        other => other,
+    };
+
+    let (scheme, port) = if config.tls.enabled {
+        ("https", config.tls.port)
+    } else if config.http.enabled {
+        ("http", config.http.port)
+    } else {
+        ("http", config.server.port)
+    };
+
+    let mode = if config.proxy.enabled {
+        "reverse-proxy"
+    } else {
+        "static"
+    };
+
+    println!("Monceda Edge Node Information");
+    println!("────────────────────────────");
+    println!("Version:          {VERSION}");
+    println!("Deployment mode:  {}", config.deployment.mode);
+    println!("Mode:             {mode}");
+    println!("Endpoint:         {scheme}://{host}:{port}");
+    println!("Server host:      {}", config.server.host);
+    println!("Server port:      {}", config.server.port);
+    println!(
+        "HTTP:             {}",
+        if config.http.enabled {
+            format!("enabled ({})", config.http.port)
+        } else {
+            "disabled".to_string()
+        }
+    );
+    println!(
+        "TLS:              {}",
+        if config.tls.enabled {
+            format!("enabled ({})", config.tls.port)
+        } else {
+            "disabled".to_string()
+        }
+    );
+    println!(
+        "Proxy:            {}",
+        if config.proxy.enabled {
+            format!("enabled ({})", config.proxy.upstream)
+        } else {
+            "disabled".to_string()
+        }
+    );
+    println!(
+        "Cache:            {}",
+        if config.cache.enabled {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    );
+    println!("Routes:           {}", config.routes.len());
+    println!(
+        "Public node:      {}",
+        if config.public_node.enabled {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    );
+
+    if config.public_node.enabled {
+        println!("Primary domain:   {}", config.public_node.primary_domain);
+        println!("Expected IPv4:    {}", config.public_node.expected_ipv4);
+    }
+
+    Ok(())
 }
 
 async fn status(config_path: &str) -> Result<(), String> {

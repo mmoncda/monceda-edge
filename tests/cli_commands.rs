@@ -186,3 +186,46 @@ fn node_status_handles_unreachable_node_cleanly() {
         "stdout: {stdout}\nstderr: {stderr}"
     );
 }
+
+#[test]
+fn node_help_lists_info() {
+    let output = Command::new(edge_bin())
+        .args(["node", "--help"])
+        .output()
+        .expect("failed to run node help");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(stdout.contains("info"));
+}
+
+#[test]
+fn node_info_outputs_effective_node_configuration() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let config = format!("{root}/monceda-edge.toml");
+
+    let output = Command::new(edge_bin())
+        .args(["node", "info", "--config", &config])
+        .output()
+        .expect("failed to run node info");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(stdout.contains("Monceda Edge Node Information"));
+    assert!(stdout.contains("Version:"));
+    assert!(stdout.contains("Deployment mode:"));
+    assert!(stdout.contains("Mode:"));
+    assert!(stdout.contains("Endpoint:"));
+    assert!(stdout.contains("HTTP:"));
+    assert!(stdout.contains("TLS:"));
+    assert!(stdout.contains("Proxy:"));
+    assert!(stdout.contains("Public node:"));
+}
