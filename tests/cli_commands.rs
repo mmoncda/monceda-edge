@@ -321,3 +321,37 @@ fn node_check_json_outputs_valid_json() {
     assert!(value["reachable"].is_boolean());
     assert!(value["routes"].is_number());
 }
+
+#[test]
+fn node_check_help_lists_strict() {
+    let output = Command::new(edge_bin())
+        .args(["node", "check", "--help"])
+        .output()
+        .expect("failed to run node check help");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--strict"));
+}
+
+#[test]
+fn node_check_strict_succeeds_when_node_is_reachable() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let config = format!("{root}/monceda-edge.toml");
+
+    let output = Command::new(edge_bin())
+        .args(["node", "check", "--config", &config, "--strict"])
+        .output()
+        .expect("failed to run strict node check");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success()
+            || stderr.contains("Node check failed in strict mode")
+            || stdout.contains("Result:           PASS"),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
+}

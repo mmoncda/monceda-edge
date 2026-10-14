@@ -67,6 +67,9 @@ enum NodeCommands {
 
         #[arg(long)]
         json: bool,
+
+        #[arg(long)]
+        strict: bool,
     },
 }
 
@@ -427,7 +430,11 @@ async fn main() {
         Some(Commands::Node { command }) => match command {
             NodeCommands::Status { config, json } => status(&config, json).await,
             NodeCommands::Info { config, json } => node_info(&config, json),
-            NodeCommands::Check { config, json } => node_check(&config, json).await,
+            NodeCommands::Check {
+                config,
+                json,
+                strict,
+            } => node_check(&config, json, strict).await,
         },
 
         Some(Commands::Doctor { config }) => doctor(&config),
@@ -2496,7 +2503,7 @@ fn node_info(config_path: &str, json_output: bool) -> Result<(), String> {
     Ok(())
 }
 
-async fn node_check(config_path: &str, json_output: bool) -> Result<(), String> {
+async fn node_check(config_path: &str, json_output: bool, strict: bool) -> Result<(), String> {
     let config = load_config(config_path)?;
 
     let host = match config.server.host.as_str() {
@@ -2571,6 +2578,10 @@ async fn node_check(config_path: &str, json_output: bool) -> Result<(), String> 
                 .map_err(|error| format!("Unable to serialize node check: {error}"))?
         );
 
+        if strict && !reachable {
+            return Err("Node check failed in strict mode".to_string());
+        }
+
         return Ok(());
     }
 
@@ -2607,6 +2618,10 @@ async fn node_check(config_path: &str, json_output: bool) -> Result<(), String> 
         "Result:           {}",
         if reachable { "PASS" } else { "WARN" }
     );
+
+    if strict && !reachable {
+        return Err("Node check failed in strict mode".to_string());
+    }
 
     Ok(())
 }
