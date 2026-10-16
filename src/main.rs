@@ -87,6 +87,9 @@ enum NodeCommands {
 
         #[arg(long)]
         host: Option<String>,
+
+        #[arg(long, default_value_t = 3)]
+        timeout: u64,
     },
 }
 
@@ -459,7 +462,8 @@ async fn main() {
                 check,
                 strict,
                 host,
-            } => node_routes(&config, json, check, strict, host.as_deref()).await,
+                timeout,
+            } => node_routes(&config, json, check, strict, host.as_deref(), timeout).await,
         },
 
         Some(Commands::Doctor { config }) => doctor(&config),
@@ -2534,6 +2538,7 @@ async fn node_routes(
     check: bool,
     strict: bool,
     host_filter: Option<&str>,
+    timeout_seconds: u64,
 ) -> Result<(), String> {
     let config = load_config(config_path)?;
 
@@ -2598,7 +2603,7 @@ async fn node_routes(
     }
 
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(3))
+        .timeout(Duration::from_secs(timeout_seconds))
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|error| format!("Unable to create route check client: {error}"))?;
@@ -2607,7 +2612,9 @@ async fn node_routes(
     let mut healthy = 0usize;
 
     for route in &routes {
+        let started = std::time::Instant::now();
         let result = client.get(&route.upstream).send().await;
+        let latency_ms = started.elapsed().as_millis();
 
         let (reachable, status) = match result {
             Ok(response) => {
@@ -2625,7 +2632,8 @@ async fn node_routes(
             "host": route.host,
             "upstream": route.upstream,
             "reachable": reachable,
-            "http_status": status
+            "http_status": status,
+            "latency_ms": latency_ms
         }));
     }
 

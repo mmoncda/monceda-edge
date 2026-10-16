@@ -567,3 +567,50 @@ fn node_routes_host_json_outputs_single_route() {
     assert_eq!(value["count"], 1);
     assert_eq!(value["routes"][0]["host"], "dashboard.local");
 }
+
+#[test]
+fn node_routes_help_lists_timeout() {
+    let output = Command::new(edge_bin())
+        .args(["node", "routes", "--help"])
+        .output()
+        .expect("failed to run node routes help");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--timeout"));
+}
+
+#[test]
+fn node_routes_check_json_includes_latency() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let config = format!("{root}/monceda-edge.toml");
+
+    let output = Command::new(edge_bin())
+        .args([
+            "node",
+            "routes",
+            "--config",
+            &config,
+            "--host",
+            "app.local",
+            "--check",
+            "--json",
+            "--timeout",
+            "1",
+        ])
+        .output()
+        .expect("failed to run route latency check");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let value: serde_json::Value = serde_json::from_str(&stdout).expect("invalid route check JSON");
+
+    assert_eq!(value["count"], 1);
+    assert!(value["routes"][0]["latency_ms"].is_number());
+}
