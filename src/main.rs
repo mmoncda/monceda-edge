@@ -2,7 +2,7 @@ use axum::{
     body::{to_bytes, Body},
     extract::State,
     http::{header, HeaderName, HeaderValue, Request, StatusCode},
-    response::Response,
+    response::{Html, Response},
     routing::get,
     Json, Router,
 };
@@ -516,6 +516,8 @@ async fn serve(
     };
 
     let app = Router::new()
+        .route("/_edge", get(edge_dashboard))
+        .route("/_edge/", get(edge_dashboard))
         .route("/_edge/health", get(edge_health))
         .route("/_edge/upstream", get(upstream_health))
         .route("/_edge/cache", get(cache_status))
@@ -652,6 +654,10 @@ async fn serve(
             .await
             .map_err(|e| format!("Server error: {e}"))
     }
+}
+
+async fn edge_dashboard() -> Html<&'static str> {
+    Html(include_str!("../public/index.html"))
 }
 
 async fn edge_health(State(state): State<AppState>) -> Json<HealthResponse> {
