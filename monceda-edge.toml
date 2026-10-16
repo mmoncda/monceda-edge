@@ -22,6 +22,11 @@ requests_per_minute = 120
 allow_ips = []
 deny_ips = []
 
+[control_plane]
+enabled = true
+allow_loopback_without_token = true
+token_env = "MONCEDA_EDGE_CONTROL_TOKEN"
+
 [http]
 enabled = true
 port = 8080

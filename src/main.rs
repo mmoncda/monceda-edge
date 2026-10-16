@@ -2,6 +2,7 @@ use axum::{
     body::{to_bytes, Body},
     extract::{ConnectInfo, Query, State},
     http::{header, HeaderName, HeaderValue, Request, StatusCode},
+    middleware::{self, Next},
     response::{Html, Response},
     routing::{get, post},
     Json, Router,
@@ -162,6 +163,9 @@ struct Config {
     security: SecurityConfig,
 
     #[serde(default)]
+    control_plane: ControlPlaneConfig,
+
+    #[serde(default)]
     routes: Vec<RouteConfig>,
 }
 
@@ -309,6 +313,32 @@ impl Default for SecurityConfig {
 
 fn default_requests_per_minute() -> u64 {
     120
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ControlPlaneConfig {
+    #[serde(default)]
+    enabled: bool,
+
+    #[serde(default = "default_true")]
+    allow_loopback_without_token: bool,
+
+    #[serde(default = "default_control_plane_token_env")]
+    token_env: String,
+}
+
+impl Default for ControlPlaneConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            allow_loopback_without_token: true,
+            token_env: default_control_plane_token_env(),
+        }
+    }
+}
+
+fn default_control_plane_token_env() -> String {
+    "MONCEDA_EDGE_CONTROL_TOKEN".to_string()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -666,6 +696,10 @@ async fn serve(
             "/_edge/acme-activation",
             get(acme_activation_status_endpoint),
         )
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            control_plane_auth,
+        ))
         .fallback(edge_fallback)
         .with_state(state)
         .layer(CompressionLayer::new())
@@ -751,6 +785,17 @@ async fn serve(
                 config.security.deny_ips.len()
             );
         }
+
+        println!(
+            "Control plane: {} (loopback bypass: {}, token env: {})",
+            if config.control_plane.enabled {
+                "protected"
+            } else {
+                "unprotected"
+            },
+            config.control_plane.allow_loopback_without_token,
+            config.control_plane.token_env
+        );
 
         println!(
             "Circuit breaker: {} ({} failures, {}s cooldown)",
@@ -1305,6 +1350,110 @@ async fn acme_status(State(state): State<AppState>) -> Json<serde_json::Value> {
                 "configured-certificate"
             },
     }))
+}
+
+fn constant_time_token_eq(left: &str, right: &str) -> bool {
+    let left = left.as_bytes();
+    let right = right.as_bytes();
+
+    if left.len() != right.len() {
+        return false;
+    }
+
+    let mut difference = 0u8;
+
+    for (a, b) in left.iter().zip(right.iter()) {
+        difference |= a ^ b;
+    }
+
+    difference == 0
+}
+
+fn request_control_token(headers: &axum::http::HeaderMap) -> Option<&str> {
+    if let Some(value) = headers
+        .get("x-monceda-control-token")
+        .and_then(|value| value.to_str().ok())
+    {
+        let value = value.trim();
+
+        if !value.is_empty() {
+            return Some(value);
+        }
+    }
+
+    headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| {
+            value
+                .strip_prefix("Bearer ")
+                .or_else(|| value.strip_prefix("bearer "))
+        })
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+async fn control_plane_auth(
+    State(state): State<AppState>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    if !state.config.control_plane.enabled {
+        return next.run(request).await;
+    }
+
+    let peer_ip = request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|connect| connect.0.ip());
+
+    if state.config.control_plane.allow_loopback_without_token
+        && peer_ip.map(|ip| ip.is_loopback()).unwrap_or(false)
+    {
+        return next.run(request).await;
+    }
+
+    let token_env = state.config.control_plane.token_env.trim();
+
+    let expected = if token_env.is_empty() {
+        String::new()
+    } else {
+        std::env::var(token_env).unwrap_or_default()
+    };
+
+    if expected.is_empty() {
+        return Response::builder()
+            .status(StatusCode::SERVICE_UNAVAILABLE)
+            .header("x-monceda-edge", VERSION)
+            .header("x-monceda-control-plane", "token-not-configured")
+            .body(Body::from(
+                "Monceda Edge control-plane token is not configured",
+            ))
+            .unwrap_or_else(|_| Response::new(Body::empty()));
+    }
+
+    let provided = request_control_token(request.headers());
+
+    let authorized = provided
+        .map(|value| constant_time_token_eq(value, &expected))
+        .unwrap_or(false);
+
+    if !authorized {
+        return Response::builder()
+            .status(StatusCode::UNAUTHORIZED)
+            .header("x-monceda-edge", VERSION)
+            .header("x-monceda-control-plane", "unauthorized")
+            .header(
+                axum::http::header::WWW_AUTHENTICATE,
+                r#"Bearer realm="Monceda Edge Control Plane""#,
+            )
+            .body(Body::from(
+                "Unauthorized Monceda Edge control-plane request",
+            ))
+            .unwrap_or_else(|_| Response::new(Body::empty()));
+    }
+
+    next.run(request).await
 }
 
 fn circuit_is_open(circuit: &UpstreamCircuitState, now: Instant) -> bool {
@@ -2803,6 +2952,16 @@ fn show_config(config_path: &str, json: bool) -> Result<(), String> {
                 "enabled": config.cache.enabled,
                 "ttl_seconds": config.cache.ttl_seconds,
             },
+            "control_plane": {
+                "enabled": config.control_plane.enabled,
+                "allow_loopback_without_token":
+                    config.control_plane.allow_loopback_without_token,
+                "token_env": config.control_plane.token_env,
+                "token_configured":
+                    std::env::var(&config.control_plane.token_env)
+                        .map(|value| !value.trim().is_empty())
+                        .unwrap_or(false),
+            },
             "acme": {
                 "enabled": config.acme.enabled,
                 "environment": config.acme.environment,
@@ -2859,6 +3018,21 @@ fn show_config(config_path: &str, json: bool) -> Result<(), String> {
     println!("  enabled     {}", config.proxy.enabled);
     println!("  upstream    {}", config.proxy.upstream);
     println!("  health      {}", config.proxy.health_path);
+    println!();
+
+    println!("Control Plane");
+    println!("  enabled          {}", config.control_plane.enabled);
+    println!(
+        "  loopback_bypass  {}",
+        config.control_plane.allow_loopback_without_token
+    );
+    println!("  token_env        {}", config.control_plane.token_env);
+    println!(
+        "  token_configured {}",
+        std::env::var(&config.control_plane.token_env)
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(false)
+    );
     println!();
 
     println!("Cache");
@@ -2976,6 +3150,15 @@ fn validate_config(config_path: &str) -> Result<(), String> {
             return Err("Configuration validation failed".to_string());
         }
     };
+
+    if config.control_plane.enabled && config.control_plane.token_env.trim().is_empty() {
+        fail(
+            "Control-plane token environment variable name cannot be empty",
+            &mut failures,
+        );
+    } else {
+        pass("Control-plane configuration valid");
+    }
 
     if config.server.host.trim().is_empty() {
         fail("Server host cannot be empty", &mut failures);
@@ -3438,6 +3621,7 @@ fn load_config(path: &str) -> Result<Config, String> {
             deployment: DeploymentConfig::default(),
             public_node: PublicNodeConfig::default(),
             security: SecurityConfig::default(),
+            control_plane: ControlPlaneConfig::default(),
             routes: Vec::new(),
         }),
 
@@ -4241,5 +4425,45 @@ mod latency_analytics_tests {
             percentile_ms(&[10, 20, 30, 40, 50, 60, 70, 80, 90, 100], 0.95),
             100
         );
+    }
+}
+
+#[cfg(test)]
+mod control_plane_auth_tests {
+    use super::{constant_time_token_eq, request_control_token};
+    use axum::http::{HeaderMap, HeaderValue};
+
+    #[test]
+    fn exact_control_token_matches() {
+        assert!(constant_time_token_eq("secret-token", "secret-token"));
+    }
+
+    #[test]
+    fn wrong_control_token_does_not_match() {
+        assert!(!constant_time_token_eq("secret-token", "wrong-token"));
+    }
+
+    #[test]
+    fn custom_header_token_is_supported() {
+        let mut headers = HeaderMap::new();
+
+        headers.insert(
+            "x-monceda-control-token",
+            HeaderValue::from_static("abc123"),
+        );
+
+        assert_eq!(request_control_token(&headers), Some("abc123"));
+    }
+
+    #[test]
+    fn bearer_token_is_supported() {
+        let mut headers = HeaderMap::new();
+
+        headers.insert(
+            axum::http::header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer abc123"),
+        );
+
+        assert_eq!(request_control_token(&headers), Some("abc123"));
     }
 }
