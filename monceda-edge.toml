@@ -12,6 +12,13 @@ health_path = "/"
 enabled = true
 ttl_seconds = 30
 
+[security]
+enabled = true
+rate_limit_enabled = true
+requests_per_minute = 120
+allow_ips = []
+deny_ips = []
+
 [http]
 enabled = true
 port = 8080

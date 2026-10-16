@@ -1,6 +1,6 @@
 use axum::{
     body::{to_bytes, Body},
-    extract::State,
+    extract::{ConnectInfo, State},
     http::{header, HeaderName, HeaderValue, Request, StatusCode},
     response::{Html, Response},
     routing::get,
@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
     collections::HashMap,
+    net::{IpAddr, SocketAddr},
     path::{Component, Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
@@ -156,6 +157,9 @@ struct Config {
     public_node: PublicNodeConfig,
 
     #[serde(default)]
+    security: SecurityConfig,
+
+    #[serde(default)]
     routes: Vec<RouteConfig>,
 }
 
@@ -257,6 +261,40 @@ fn default_tls_cert() -> String {
 
 fn default_tls_key() -> String {
     "certs/localhost-key.pem".to_string()
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct SecurityConfig {
+    #[serde(default)]
+    enabled: bool,
+
+    #[serde(default)]
+    rate_limit_enabled: bool,
+
+    #[serde(default = "default_requests_per_minute")]
+    requests_per_minute: u64,
+
+    #[serde(default)]
+    allow_ips: Vec<String>,
+
+    #[serde(default)]
+    deny_ips: Vec<String>,
+}
+
+impl Default for SecurityConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            rate_limit_enabled: false,
+            requests_per_minute: default_requests_per_minute(),
+            allow_ips: Vec::new(),
+            deny_ips: Vec::new(),
+        }
+    }
+}
+
+fn default_requests_per_minute() -> u64 {
+    120
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -419,6 +457,7 @@ struct AppState {
     client: reqwest::Client,
     cache: Arc<RwLock<HashMap<String, CacheEntry>>>,
     metrics: Arc<RwLock<TrafficMetrics>>,
+    rate_limits: Arc<RwLock<HashMap<IpAddr, RateLimitWindow>>>,
 }
 
 #[derive(Default)]
@@ -429,7 +468,15 @@ struct TrafficMetrics {
     responses_2xx: u64,
     responses_4xx: u64,
     responses_5xx: u64,
+    firewall_blocks: u64,
+    rate_limit_blocks: u64,
     route_requests: HashMap<String, u64>,
+}
+
+#[derive(Clone)]
+struct RateLimitWindow {
+    started_at: Instant,
+    requests: u64,
 }
 
 #[derive(Clone)]
@@ -526,6 +573,7 @@ async fn serve(
         client,
         cache: Arc::new(RwLock::new(HashMap::new())),
         metrics: Arc::new(RwLock::new(TrafficMetrics::default())),
+        rate_limits: Arc::new(RwLock::new(HashMap::new())),
     };
 
     let app = Router::new()
@@ -535,6 +583,7 @@ async fn serve(
         .route("/_edge/upstream", get(upstream_health))
         .route("/_edge/cache", get(cache_status))
         .route("/_edge/metrics", get(metrics_status))
+        .route("/_edge/security", get(security_status))
         .route("/_edge/routes", get(routes_status))
         .route("/_edge/routes/check", get(routes_check_status))
         .route("/_edge/acme", get(acme_status))
@@ -602,6 +651,32 @@ async fn serve(
             }
         }
         println!(
+            "Security: {}",
+            if config.security.enabled {
+                "enabled"
+            } else {
+                "disabled"
+            }
+        );
+
+        if config.security.enabled {
+            println!(
+                "Rate limit: {} ({} req/min/IP)",
+                if config.security.rate_limit_enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                },
+                config.security.requests_per_minute
+            );
+            println!(
+                "Firewall: {} allow rule(s), {} deny rule(s)",
+                config.security.allow_ips.len(),
+                config.security.deny_ips.len()
+            );
+        }
+
+        println!(
             "Cache: {} (TTL {}s)",
             if config.cache.enabled {
                 "enabled"
@@ -639,7 +714,7 @@ async fn serve(
         println!("Certificate: {}", config.tls.cert);
 
         axum_server::bind_rustls(socket_address, tls_config)
-            .serve(app.into_make_service())
+            .serve(app.into_make_service_with_connect_info::<SocketAddr>())
             .await
             .map_err(|e| format!("HTTPS server error: {e}"))
     } else {
@@ -665,9 +740,12 @@ async fn serve(
         println!("TLS: disabled");
         println!("HTTP listening on http://{address}");
 
-        axum::serve(listener, app)
-            .await
-            .map_err(|e| format!("Server error: {e}"))
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .map_err(|e| format!("Server error: {e}"))
     }
 }
 
@@ -1213,6 +1291,124 @@ async fn routes_check_status(State(state): State<AppState>) -> Json<serde_json::
     }))
 }
 
+async fn security_status(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let metrics = state.metrics.read().await;
+    let active_clients = state.rate_limits.read().await.len();
+
+    Json(json!({
+        "enabled": state.config.security.enabled,
+        "rate_limit": {
+            "enabled": state.config.security.rate_limit_enabled,
+            "requests_per_minute": state.config.security.requests_per_minute,
+            "active_clients": active_clients,
+            "blocked": metrics.rate_limit_blocks
+        },
+        "firewall": {
+            "allow_ips": state.config.security.allow_ips,
+            "deny_ips": state.config.security.deny_ips,
+            "blocked": metrics.firewall_blocks
+        }
+    }))
+}
+
+fn parsed_ip_list(values: &[String]) -> Vec<IpAddr> {
+    values
+        .iter()
+        .filter_map(|value| value.trim().parse::<IpAddr>().ok())
+        .collect()
+}
+
+fn firewall_allows(ip: IpAddr, allow_ips: &[String], deny_ips: &[String]) -> bool {
+    let denied = parsed_ip_list(deny_ips);
+
+    if denied.contains(&ip) {
+        return false;
+    }
+
+    let allowed = parsed_ip_list(allow_ips);
+
+    if !allowed.is_empty() && !allowed.contains(&ip) {
+        return false;
+    }
+
+    true
+}
+
+async fn enforce_security(state: &AppState, client_ip: IpAddr) -> Option<Response> {
+    if !state.config.security.enabled {
+        return None;
+    }
+
+    if !firewall_allows(
+        client_ip,
+        &state.config.security.allow_ips,
+        &state.config.security.deny_ips,
+    ) {
+        {
+            let mut metrics = state.metrics.write().await;
+            metrics.firewall_blocks += 1;
+        }
+
+        return Some(
+            Response::builder()
+                .status(StatusCode::FORBIDDEN)
+                .header("x-monceda-edge", VERSION)
+                .header("x-monceda-security", "firewall-block")
+                .body(Body::from("Forbidden by Monceda Edge firewall"))
+                .unwrap_or_else(|_| Response::new(Body::empty())),
+        );
+    }
+
+    if !state.config.security.rate_limit_enabled {
+        return None;
+    }
+
+    let limit = state.config.security.requests_per_minute;
+
+    if limit == 0 {
+        return None;
+    }
+
+    let now = Instant::now();
+    let mut rate_limits = state.rate_limits.write().await;
+
+    let entry = rate_limits.entry(client_ip).or_insert(RateLimitWindow {
+        started_at: now,
+        requests: 0,
+    });
+
+    if now.duration_since(entry.started_at) >= Duration::from_secs(60) {
+        entry.started_at = now;
+        entry.requests = 0;
+    }
+
+    if entry.requests >= limit {
+        let elapsed = now.duration_since(entry.started_at).as_secs();
+        let retry_after = 60u64.saturating_sub(elapsed).max(1);
+
+        drop(rate_limits);
+
+        {
+            let mut metrics = state.metrics.write().await;
+            metrics.rate_limit_blocks += 1;
+        }
+
+        return Some(
+            Response::builder()
+                .status(StatusCode::TOO_MANY_REQUESTS)
+                .header("x-monceda-edge", VERSION)
+                .header("x-monceda-security", "rate-limited")
+                .header("retry-after", retry_after.to_string())
+                .body(Body::from("Too many requests"))
+                .unwrap_or_else(|_| Response::new(Body::empty())),
+        );
+    }
+
+    entry.requests += 1;
+
+    None
+}
+
 async fn metrics_status(State(state): State<AppState>) -> Json<serde_json::Value> {
     let metrics = state.metrics.read().await;
 
@@ -1248,6 +1444,10 @@ async fn metrics_status(State(state): State<AppState>) -> Json<serde_json::Value
             "2xx": metrics.responses_2xx,
             "4xx": metrics.responses_4xx,
             "5xx": metrics.responses_5xx
+        },
+        "security": {
+            "firewall_blocks": metrics.firewall_blocks,
+            "rate_limit_blocks": metrics.rate_limit_blocks
         },
         "cache": {
             "hits": metrics.cache_hits,
@@ -1301,15 +1501,19 @@ async fn cache_status(State(state): State<AppState>) -> Json<serde_json::Value> 
     }))
 }
 
-async fn edge_fallback(State(state): State<AppState>, request: Request<Body>) -> Response {
+async fn edge_fallback(
+    State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    request: Request<Body>,
+) -> Response {
     if state.config.proxy.enabled {
-        proxy_request(state, request).await
+        proxy_request(state, peer.ip(), request).await
     } else {
         serve_static(state, request).await
     }
 }
 
-async fn proxy_request(state: AppState, request: Request<Body>) -> Response {
+async fn proxy_request(state: AppState, client_ip: IpAddr, request: Request<Body>) -> Response {
     let method = request.method().clone();
 
     let host = request
@@ -1328,6 +1532,11 @@ async fn proxy_request(state: AppState, request: Request<Body>) -> Response {
         .to_ascii_lowercase();
 
     record_proxy_request(&state, &host).await;
+
+    if let Some(response) = enforce_security(&state, client_ip).await {
+        record_response_status(&state, response.status()).await;
+        return response;
+    }
 
     let selected_upstream = select_upstream(&state.config, &host);
 
@@ -1776,7 +1985,7 @@ async fn run_acme_runtime(config: Config, app: Router) -> Result<(), String> {
 
     let https_server = axum_server::bind(https_socket)
         .acceptor(acceptor)
-        .serve(app.into_make_service());
+        .serve(app.into_make_service_with_connect_info::<SocketAddr>());
 
     tokio::try_join!(http_server, https_server)
         .map_err(|error| format!("ACME server error: {}", error))?;
@@ -2603,6 +2812,7 @@ fn load_config(path: &str) -> Result<Config, String> {
             acme: AcmeConfig::default(),
             deployment: DeploymentConfig::default(),
             public_node: PublicNodeConfig::default(),
+            security: SecurityConfig::default(),
             routes: Vec::new(),
         }),
 
@@ -3163,5 +3373,47 @@ mod cache_policy_tests {
     fn query_strings_do_not_break_asset_detection() {
         assert!(is_cacheable_asset_path("/image.webp?width=640&quality=80"));
         assert!(!is_cacheable_asset_path("/api/image?format=webp"));
+    }
+}
+
+#[cfg(test)]
+mod security_policy_tests {
+    use super::firewall_allows;
+    use std::net::IpAddr;
+
+    fn ip(value: &str) -> IpAddr {
+        value.parse().unwrap()
+    }
+
+    #[test]
+    fn empty_firewall_rules_allow_clients() {
+        assert!(firewall_allows(ip("127.0.0.1"), &[], &[],));
+    }
+
+    #[test]
+    fn deny_rule_blocks_matching_ip() {
+        assert!(!firewall_allows(
+            ip("127.0.0.1"),
+            &[],
+            &["127.0.0.1".to_string()],
+        ));
+    }
+
+    #[test]
+    fn allowlist_blocks_unlisted_ip() {
+        assert!(!firewall_allows(
+            ip("10.0.0.2"),
+            &["10.0.0.1".to_string()],
+            &[],
+        ));
+    }
+
+    #[test]
+    fn deny_rule_overrides_allow_rule() {
+        assert!(!firewall_allows(
+            ip("10.0.0.1"),
+            &["10.0.0.1".to_string()],
+            &["10.0.0.1".to_string()],
+        ));
     }
 }
