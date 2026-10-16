@@ -522,6 +522,7 @@ async fn serve(
         .route("/_edge/upstream", get(upstream_health))
         .route("/_edge/cache", get(cache_status))
         .route("/_edge/routes", get(routes_status))
+        .route("/_edge/routes/check", get(routes_check_status))
         .route("/_edge/acme", get(acme_status))
         .route("/_edge/readiness", get(readiness_status))
         .route("/_edge/onboarding", get(onboarding_status))
@@ -1133,6 +1134,68 @@ async fn routes_status(State(state): State<AppState>) -> Json<serde_json::Value>
         "count": state.config.routes.len(),
         "routes": state.config.routes,
         "default_upstream": state.config.proxy.upstream,
+    }))
+}
+
+async fn routes_check_status(State(state): State<AppState>) -> Json<serde_json::Value> {
+    const ROUTE_CHECK_TIMEOUT_SECONDS: u64 = 3;
+
+    let mut checked_routes = Vec::new();
+    let mut healthy = 0usize;
+
+    for route in &state.config.routes {
+        let started = Instant::now();
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(ROUTE_CHECK_TIMEOUT_SECONDS),
+            state.client.get(&route.upstream).send(),
+        )
+        .await;
+
+        let latency_ms = started.elapsed().as_millis();
+
+        let (reachable, status, error, timed_out) = match result {
+            Ok(Ok(response)) => {
+                let status = response.status();
+                (status.is_success(), Some(status.as_u16()), None, false)
+            }
+
+            Ok(Err(error)) => (false, None, Some(error.to_string()), false),
+
+            Err(_) => (
+                false,
+                None,
+                Some(format!(
+                    "Route check timed out after {}s",
+                    ROUTE_CHECK_TIMEOUT_SECONDS
+                )),
+                true,
+            ),
+        };
+
+        if reachable {
+            healthy += 1;
+        }
+
+        checked_routes.push(json!({
+            "host": route.host,
+            "upstream": route.upstream,
+            "reachable": reachable,
+            "http_status": status,
+            "latency_ms": latency_ms,
+            "timed_out": timed_out,
+            "error": error
+        }));
+    }
+
+    let unreachable = checked_routes.len().saturating_sub(healthy);
+
+    Json(json!({
+        "count": checked_routes.len(),
+        "healthy": healthy,
+        "unreachable": unreachable,
+        "timeout_seconds": ROUTE_CHECK_TIMEOUT_SECONDS,
+        "routes": checked_routes
     }))
 }
 

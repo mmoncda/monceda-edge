@@ -2306,6 +2306,7 @@ td{
                 <th>Host</th>
                 <th>Upstream</th>
                 <th>State</th>
+                <th>Latency</th>
               </tr>
             </thead>
 
@@ -2512,6 +2513,7 @@ const endpoints = {
   upstream:"/_edge/upstream",
   cache:"/_edge/cache",
   routes:"/_edge/routes",
+  routeChecks:"/_edge/routes/check",
   acme:"/_edge/acme",
   readiness:"/_edge/readiness",
   onboarding:"/_edge/onboarding",
@@ -2564,10 +2566,44 @@ function renderTrafficRoutes(routes){
     const tr =
       document.createElement("tr");
 
+    const reachable =
+      route.reachable === true;
+
+    const checked =
+      typeof route.reachable === "boolean";
+
+    const stateText =
+      !checked
+        ? "checking"
+        : reachable
+          ? (
+              route.http_status
+                ? `up • ${route.http_status}`
+                : "up"
+            )
+          : (
+              route.timed_out
+                ? "timeout"
+                : "down"
+            );
+
+    const stateClass =
+      !checked
+        ? "warn"
+        : reachable
+          ? "good"
+          : "bad";
+
+    const latency =
+      Number.isFinite(Number(route.latency_ms))
+        ? `${route.latency_ms} ms`
+        : "—";
+
     tr.innerHTML = `
       <td class="mono"></td>
       <td class="mono"></td>
-      <td><span class="chip good">active</span></td>
+      <td><span class="chip ${stateClass}"></span></td>
+      <td class="mono"></td>
     `;
 
     tr.children[0].textContent =
@@ -2575,6 +2611,16 @@ function renderTrafficRoutes(routes){
 
     tr.children[1].textContent =
       route.upstream || "—";
+
+    tr.querySelector(".chip").textContent =
+      stateText;
+
+    tr.children[3].textContent =
+      latency;
+
+    if(route.error){
+      tr.title = route.error;
+    }
 
     body.appendChild(tr);
   }
@@ -2762,6 +2808,37 @@ function renderInspector(){
   }
 }
 
+function routeStatusMeta(route){
+
+  const upstream =
+    route?.upstream || "—";
+
+  if(typeof route?.reachable !== "boolean"){
+    return upstream;
+  }
+
+  const state =
+    route.reachable
+      ? "UP"
+      : (
+          route.timed_out
+            ? "TIMEOUT"
+            : "DOWN"
+        );
+
+  const latency =
+    Number.isFinite(Number(route.latency_ms))
+      ? `${route.latency_ms}ms`
+      : "—";
+
+  const http =
+    route.http_status
+      ? `HTTP ${route.http_status}`
+      : "no response";
+
+  return `${upstream} • ${state} • ${http} • ${latency}`;
+}
+
 async function refresh(){
 
   for(const [name,path] of Object.entries(endpoints)){
@@ -2811,18 +2888,26 @@ async function refresh(){
   $("sumRuntime").className =
     `summary-value ${online ? "good" : "bad"}`;
 
-  const routes =
+  const configuredRoutes =
     state.routes?.routes || [];
 
+  const checkedRoutes =
+    state.routeChecks?.routes || [];
+
+  const routes =
+    checkedRoutes.length
+      ? checkedRoutes
+      : configuredRoutes;
+
   $("sumRoutes").textContent =
-    String(routes.length);
+    String(configuredRoutes.length);
 
   if(routes[0]){
     $("routeATitle").textContent =
       routes[0].host || "route 1";
 
     $("routeAMeta").textContent =
-      routes[0].upstream || "—";
+      routeStatusMeta(routes[0]);
   }
 
   if(routes[1]){
@@ -2830,7 +2915,7 @@ async function refresh(){
       routes[1].host || "route 2";
 
     $("routeBMeta").textContent =
-      routes[1].upstream || "—";
+      routeStatusMeta(routes[1]);
   }
 
   renderTrafficRoutes(routes);
