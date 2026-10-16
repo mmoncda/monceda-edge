@@ -421,6 +421,9 @@ fn default_true() -> bool {
 struct RouteConfig {
     host: String,
     upstream: String,
+
+    #[serde(default)]
+    fallback_upstreams: Vec<String>,
 }
 
 fn default_host() -> String {
@@ -472,6 +475,7 @@ struct TrafficMetrics {
     responses_5xx: u64,
     firewall_blocks: u64,
     rate_limit_blocks: u64,
+    upstream_failovers: u64,
     route_requests: HashMap<String, u64>,
 }
 
@@ -663,6 +667,10 @@ async fn serve(
 
             for route in &config.routes {
                 println!("  {} -> {}", route.host, route.upstream);
+
+                for fallback in &route.fallback_upstreams {
+                    println!("    fallback -> {}", fallback);
+                }
             }
         }
         println!(
@@ -1464,6 +1472,9 @@ async fn metrics_status(State(state): State<AppState>) -> Json<serde_json::Value
             "firewall_blocks": metrics.firewall_blocks,
             "rate_limit_blocks": metrics.rate_limit_blocks
         },
+        "upstream": {
+            "failovers": metrics.upstream_failovers
+        },
         "cache": {
             "hits": metrics.cache_hits,
             "misses": metrics.cache_misses,
@@ -1669,7 +1680,7 @@ async fn proxy_request(state: AppState, client_ip: IpAddr, request: Request<Body
         return response;
     }
 
-    let selected_upstream = select_upstream(&state.config, &host);
+    let upstream_candidates = select_upstreams(&state.config, &host);
 
     let path_and_query = request
         .uri()
@@ -1694,12 +1705,6 @@ async fn proxy_request(state: AppState, client_ip: IpAddr, request: Request<Body
         record_cache_result(&state, false).await;
     }
 
-    let upstream_url = format!(
-        "{}{}",
-        selected_upstream.trim_end_matches('/'),
-        path_and_query
-    );
-
     let (parts, body) = request.into_parts();
 
     let body = match to_bytes(body, 32 * 1024 * 1024).await {
@@ -1714,27 +1719,51 @@ async fn proxy_request(state: AppState, client_ip: IpAddr, request: Request<Body
         }
     };
 
-    let mut upstream_request = state.client.request(method.clone(), &upstream_url);
+    let mut upstream_response = None;
+    let mut selected_upstream = String::new();
+    let mut last_error = String::new();
 
-    for (name, value) in parts.headers.iter() {
-        if is_hop_by_hop_request_header(name.as_str()) {
-            continue;
+    for (index, candidate) in upstream_candidates.iter().enumerate() {
+        let upstream_url = format!("{}{}", candidate.trim_end_matches('/'), path_and_query);
+
+        let mut upstream_request = state.client.request(method.clone(), &upstream_url);
+
+        for (name, value) in parts.headers.iter() {
+            if is_hop_by_hop_request_header(name.as_str()) {
+                continue;
+            }
+
+            upstream_request = upstream_request.header(name, value);
         }
 
-        upstream_request = upstream_request.header(name, value);
+        match upstream_request.body(body.clone()).send().await {
+            Ok(response) => {
+                selected_upstream = candidate.clone();
+                upstream_response = Some(response);
+
+                if index > 0 {
+                    let mut metrics = state.metrics.write().await;
+                    metrics.upstream_failovers += 1;
+                }
+
+                break;
+            }
+
+            Err(error) => {
+                last_error = format!("{} -> {}", candidate, error);
+            }
+        }
     }
 
-    let upstream_response = match upstream_request.body(body).send().await {
-        Ok(response) => response,
-        Err(error) => {
+    let upstream_response = match upstream_response {
+        Some(response) => response,
+
+        None => {
             record_response_status(&state, StatusCode::BAD_GATEWAY).await;
 
             return text_response(
                 StatusCode::BAD_GATEWAY,
-                format!(
-                    "Monceda Edge could not reach upstream {}: {error}",
-                    selected_upstream
-                ),
+                format!("Monceda Edge could not reach any upstream: {}", last_error),
             );
         }
     };
@@ -2258,7 +2287,7 @@ async fn http_redirect(
     })
 }
 
-fn select_upstream(config: &Config, host: &str) -> String {
+fn select_upstreams(config: &Config, host: &str) -> Vec<String> {
     let host = host.trim().trim_end_matches('.').to_ascii_lowercase();
 
     for route in &config.routes {
@@ -2268,11 +2297,28 @@ fn select_upstream(config: &Config, host: &str) -> String {
             .trim_end_matches('.')
             .eq_ignore_ascii_case(&host)
         {
-            return route.upstream.clone();
+            let mut upstreams = vec![route.upstream.clone()];
+
+            for fallback in &route.fallback_upstreams {
+                if !fallback.trim().is_empty()
+                    && !upstreams.iter().any(|existing| existing == fallback)
+                {
+                    upstreams.push(fallback.clone());
+                }
+            }
+
+            return upstreams;
         }
     }
 
-    config.proxy.upstream.clone()
+    vec![config.proxy.upstream.clone()]
+}
+
+fn select_upstream(config: &Config, host: &str) -> String {
+    select_upstreams(config, host)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| config.proxy.upstream.clone())
 }
 
 fn normalize_health_path(path: &str) -> String {
@@ -2430,6 +2476,10 @@ fn show_config(config_path: &str, json: bool) -> Result<(), String> {
     } else {
         for route in &config.routes {
             println!("  {} -> {}", route.host, route.upstream);
+
+            for fallback in &route.fallback_upstreams {
+                println!("    fallback -> {}", fallback);
+            }
         }
     }
 
@@ -3596,5 +3646,88 @@ mod cache_purge_tests {
             Some("dashboard.local"),
             Some("/assets/"),
         ));
+    }
+}
+
+#[cfg(test)]
+mod upstream_failover_tests {
+    use super::{select_upstream, select_upstreams, Config};
+
+    fn config_with_routes(routes: &str) -> Config {
+        let source = format!(
+            r#"
+[proxy]
+enabled = true
+upstream = "http://127.0.0.1:3000"
+
+{}
+"#,
+            routes
+        );
+
+        toml::from_str(&source).unwrap()
+    }
+
+    #[test]
+    fn route_returns_primary_before_fallbacks() {
+        let config = config_with_routes(
+            r#"
+[[routes]]
+host = "app.local"
+upstream = "http://127.0.0.1:4000"
+fallback_upstreams = [
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5000"
+]
+"#,
+        );
+
+        assert_eq!(
+            select_upstreams(&config, "app.local"),
+            vec![
+                "http://127.0.0.1:4000".to_string(),
+                "http://127.0.0.1:3000".to_string(),
+                "http://127.0.0.1:5000".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn route_without_fallback_keeps_primary_behavior() {
+        let config = config_with_routes(
+            r#"
+[[routes]]
+host = "dashboard.local"
+upstream = "http://127.0.0.1:3000"
+"#,
+        );
+
+        assert_eq!(
+            select_upstream(&config, "dashboard.local"),
+            "http://127.0.0.1:3000"
+        );
+    }
+
+    #[test]
+    fn duplicate_fallback_is_not_repeated() {
+        let config = config_with_routes(
+            r#"
+[[routes]]
+host = "app.local"
+upstream = "http://127.0.0.1:4000"
+fallback_upstreams = [
+  "http://127.0.0.1:4000",
+  "http://127.0.0.1:3000"
+]
+"#,
+        );
+
+        assert_eq!(
+            select_upstreams(&config, "app.local"),
+            vec![
+                "http://127.0.0.1:4000".to_string(),
+                "http://127.0.0.1:3000".to_string(),
+            ]
+        );
     }
 }
