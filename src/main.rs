@@ -1019,6 +1019,49 @@ async fn public_network_preflight(config: &Config) -> serde_json::Value {
     })
 }
 
+fn public_bind_candidate(host: &str) -> bool {
+    let host = host.trim();
+
+    if host.is_empty() || host.eq_ignore_ascii_case("localhost") {
+        return false;
+    }
+
+    match host.parse::<IpAddr>() {
+        Ok(ip) => !ip.is_loopback(),
+        Err(_) => true,
+    }
+}
+
+fn control_plane_token_configured(config: &Config) -> bool {
+    let token_env = config.control_plane.token_env.trim();
+
+    if token_env.is_empty() {
+        return false;
+    }
+
+    std::env::var(token_env)
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false)
+}
+
+fn public_control_plane_policy(
+    enabled: bool,
+    allow_loopback_without_token: bool,
+    token_env: &str,
+    token_configured: bool,
+) -> bool {
+    enabled && !allow_loopback_without_token && !token_env.trim().is_empty() && token_configured
+}
+
+fn public_control_plane_ready(config: &Config) -> bool {
+    public_control_plane_policy(
+        config.control_plane.enabled,
+        config.control_plane.allow_loopback_without_token,
+        &config.control_plane.token_env,
+        control_plane_token_configured(config),
+    )
+}
+
 fn public_onboarding_status(config: &Config) -> serde_json::Value {
     let domain = config
         .public_node
@@ -1040,6 +1083,10 @@ fn public_onboarding_status(config: &Config) -> serde_json::Value {
 
     let public_ports = config.http.port == 80 && config.tls.port == 443;
 
+    let public_bind = public_bind_candidate(&config.server.host);
+
+    let control_plane_ready = public_control_plane_ready(config);
+
     let contact_configured = !config.acme.email.trim().is_empty();
 
     let cache_configured = !config.acme.cache_dir.trim().is_empty();
@@ -1052,6 +1099,8 @@ fn public_onboarding_status(config: &Config) -> serde_json::Value {
         && domain_eligible
         && route_exists
         && public_ports
+        && public_bind
+        && control_plane_ready
         && config.acme.enabled
         && contact_configured
         && cache_configured;
@@ -1068,6 +1117,14 @@ fn public_onboarding_status(config: &Config) -> serde_json::Value {
             "http_port_80": config.http.port == 80,
             "https_port_443": config.tls.port == 443,
             "public_ports": public_ports,
+            "public_bind": public_bind,
+            "server_host": config.server.host,
+            "control_plane_hardened": control_plane_ready,
+            "control_plane_enabled": config.control_plane.enabled,
+            "control_plane_loopback_bypass":
+                config.control_plane.allow_loopback_without_token,
+            "control_plane_token_configured":
+                control_plane_token_configured(config),
             "acme_enabled": config.acme.enabled,
             "contact_configured": contact_configured,
             "cache_configured": cache_configured
@@ -1097,6 +1154,10 @@ fn production_readiness(config: &Config) -> serde_json::Value {
 
     let ports_ok = config.http.port == 80 && config.tls.port == 443;
 
+    let bind_ok = public_bind_candidate(&config.server.host);
+
+    let control_plane_ok = public_control_plane_ready(config);
+
     let domains_ok = !eligible_domains.is_empty();
 
     let contact_ok = !config.acme.email.trim().is_empty();
@@ -1114,6 +1175,8 @@ fn production_readiness(config: &Config) -> serde_json::Value {
     let ready = production_mode
         && public_ports_requirement_ok
         && public_domains_requirement_ok
+        && bind_ok
+        && control_plane_ok
         && contact_ok
         && acme_enabled
         && acme_production
@@ -1132,6 +1195,20 @@ fn production_readiness(config: &Config) -> serde_json::Value {
             "required": config.deployment.require_public_domains,
             "eligible": eligible_domains,
             "valid": domains_ok
+        },
+        "network_bind": {
+            "host": config.server.host,
+            "public_candidate": bind_ok
+        },
+        "control_plane": {
+            "enabled": config.control_plane.enabled,
+            "allow_loopback_without_token":
+                config.control_plane.allow_loopback_without_token,
+            "token_env": config.control_plane.token_env,
+            "token_configured":
+                control_plane_token_configured(config),
+            "hardened_for_public_ingress":
+                control_plane_ok
         },
         "acme": {
             "enabled": acme_enabled,
@@ -1173,12 +1250,17 @@ fn acme_activation_status(config: &Config) -> serde_json::Value {
 
     let production = config.acme.environment.eq_ignore_ascii_case("production");
 
+    let public_bind = public_bind_candidate(&config.server.host);
+    let control_plane_ready = public_control_plane_ready(config);
+
     let runtime_ready = config.acme.enabled
         && config.public_node.enabled
         && domain_eligible
         && route_exists
         && port_80
         && port_443
+        && public_bind
+        && control_plane_ready
         && contact
         && cache;
 
@@ -1214,6 +1296,12 @@ fn acme_activation_status(config: &Config) -> serde_json::Value {
 
             "https_port_443":
                 port_443,
+
+            "public_bind":
+                public_bind,
+
+            "control_plane_hardened":
+                control_plane_ready,
 
             "acme_enabled":
                 config.acme.enabled,
@@ -1264,11 +1352,17 @@ fn acme_runtime_ready(config: &Config) -> bool {
 
     let public_ports = config.http.port == 80 && config.tls.port == 443;
 
+    let public_bind = public_bind_candidate(&config.server.host);
+
+    let control_plane_ready = public_control_plane_ready(config);
+
     config.acme.enabled
         && config.public_node.enabled
         && domain_eligible
         && route_exists
         && public_ports
+        && public_bind
+        && control_plane_ready
         && !config.acme.email.trim().is_empty()
         && !config.acme.cache_dir.trim().is_empty()
 }
@@ -4465,5 +4559,54 @@ mod control_plane_auth_tests {
         );
 
         assert_eq!(request_control_token(&headers), Some("abc123"));
+    }
+}
+
+#[cfg(test)]
+mod public_ingress_readiness_tests {
+    use super::{public_bind_candidate, public_control_plane_policy};
+
+    #[test]
+    fn loopback_bind_is_not_public_ready() {
+        assert!(!public_bind_candidate("127.0.0.1"));
+        assert!(!public_bind_candidate("::1"));
+        assert!(!public_bind_candidate("localhost"));
+    }
+
+    #[test]
+    fn wildcard_bind_is_public_candidate() {
+        assert!(public_bind_candidate("0.0.0.0"));
+        assert!(public_bind_candidate("::"));
+    }
+
+    #[test]
+    fn public_control_plane_requires_strict_token_policy() {
+        assert!(public_control_plane_policy(
+            true,
+            false,
+            "MONCEDA_EDGE_CONTROL_TOKEN",
+            true,
+        ));
+
+        assert!(!public_control_plane_policy(
+            true,
+            true,
+            "MONCEDA_EDGE_CONTROL_TOKEN",
+            true,
+        ));
+
+        assert!(!public_control_plane_policy(
+            true,
+            false,
+            "MONCEDA_EDGE_CONTROL_TOKEN",
+            false,
+        ));
+
+        assert!(!public_control_plane_policy(
+            false,
+            false,
+            "MONCEDA_EDGE_CONTROL_TOKEN",
+            true,
+        ));
     }
 }
