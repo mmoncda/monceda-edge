@@ -2256,6 +2256,46 @@ td{
         <div class="view-meta">routing plane</div>
       </div>
 
+      <div class="summary-row">
+
+        <div class="summary-item">
+          <div class="summary-label">Requests</div>
+          <div id="trafficRequests" class="summary-value">0</div>
+          <div class="summary-meta">proxied traffic</div>
+        </div>
+
+        <div class="summary-item">
+          <div class="summary-label">2xx</div>
+          <div id="traffic2xx" class="summary-value good">0</div>
+          <div class="summary-meta">successful</div>
+        </div>
+
+        <div class="summary-item">
+          <div class="summary-label">4xx</div>
+          <div id="traffic4xx" class="summary-value warn">0</div>
+          <div class="summary-meta">client errors</div>
+        </div>
+
+        <div class="summary-item">
+          <div class="summary-label">5xx</div>
+          <div id="traffic5xx" class="summary-value bad">0</div>
+          <div class="summary-meta">edge / upstream errors</div>
+        </div>
+
+        <div class="summary-item">
+          <div class="summary-label">Cache Hits</div>
+          <div id="trafficCacheHits" class="summary-value">0</div>
+          <div class="summary-meta">served from edge</div>
+        </div>
+
+        <div class="summary-item">
+          <div class="summary-label">Hit Rate</div>
+          <div id="trafficHitRate" class="summary-value">0%</div>
+          <div class="summary-meta">cache efficiency</div>
+        </div>
+
+      </div>
+
       <div class="traffic-grid">
 
         <div class="panel">
@@ -2307,6 +2347,7 @@ td{
                 <th>Upstream</th>
                 <th>State</th>
                 <th>Latency</th>
+                <th>Requests</th>
               </tr>
             </thead>
 
@@ -2512,6 +2553,7 @@ const endpoints = {
   health:"/_edge/health",
   upstream:"/_edge/upstream",
   cache:"/_edge/cache",
+  metrics:"/_edge/metrics",
   routes:"/_edge/routes",
   routeChecks:"/_edge/routes/check",
   acme:"/_edge/acme",
@@ -2604,6 +2646,7 @@ function renderTrafficRoutes(routes){
       <td class="mono"></td>
       <td><span class="chip ${stateClass}"></span></td>
       <td class="mono"></td>
+      <td class="mono"></td>
     `;
 
     tr.children[0].textContent =
@@ -2617,6 +2660,15 @@ function renderTrafficRoutes(routes){
 
     tr.children[3].textContent =
       latency;
+
+    const routeMetric =
+      (state.metrics?.routes || [])
+        .find(item =>
+          item.host === route.host
+        );
+
+    tr.children[4].textContent =
+      String(routeMetric?.requests ?? 0);
 
     if(route.error){
       tr.title = route.error;
@@ -2887,6 +2939,33 @@ async function refresh(){
 
   $("sumRuntime").className =
     `summary-value ${online ? "good" : "bad"}`;
+
+  const metrics =
+    state.metrics || {};
+
+  const responseMetrics =
+    metrics.responses || {};
+
+  const cacheMetrics =
+    metrics.cache || {};
+
+  $("trafficRequests").textContent =
+    String(metrics.total_requests ?? 0);
+
+  $("traffic2xx").textContent =
+    String(responseMetrics["2xx"] ?? 0);
+
+  $("traffic4xx").textContent =
+    String(responseMetrics["4xx"] ?? 0);
+
+  $("traffic5xx").textContent =
+    String(responseMetrics["5xx"] ?? 0);
+
+  $("trafficCacheHits").textContent =
+    String(cacheMetrics.hits ?? 0);
+
+  $("trafficHitRate").textContent =
+    `${Number(cacheMetrics.hit_rate ?? 0).toFixed(1)}%`;
 
   const configuredRoutes =
     state.routes?.routes || [];

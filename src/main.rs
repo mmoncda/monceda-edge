@@ -418,6 +418,18 @@ struct AppState {
     config: Arc<Config>,
     client: reqwest::Client,
     cache: Arc<RwLock<HashMap<String, CacheEntry>>>,
+    metrics: Arc<RwLock<TrafficMetrics>>,
+}
+
+#[derive(Default)]
+struct TrafficMetrics {
+    total_requests: u64,
+    cache_hits: u64,
+    cache_misses: u64,
+    responses_2xx: u64,
+    responses_4xx: u64,
+    responses_5xx: u64,
+    route_requests: HashMap<String, u64>,
 }
 
 #[derive(Clone)]
@@ -513,6 +525,7 @@ async fn serve(
         config: Arc::new(config.clone()),
         client,
         cache: Arc::new(RwLock::new(HashMap::new())),
+        metrics: Arc::new(RwLock::new(TrafficMetrics::default())),
     };
 
     let app = Router::new()
@@ -521,6 +534,7 @@ async fn serve(
         .route("/_edge/health", get(edge_health))
         .route("/_edge/upstream", get(upstream_health))
         .route("/_edge/cache", get(cache_status))
+        .route("/_edge/metrics", get(metrics_status))
         .route("/_edge/routes", get(routes_status))
         .route("/_edge/routes/check", get(routes_check_status))
         .route("/_edge/acme", get(acme_status))
@@ -1199,6 +1213,83 @@ async fn routes_check_status(State(state): State<AppState>) -> Json<serde_json::
     }))
 }
 
+async fn metrics_status(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let metrics = state.metrics.read().await;
+
+    let cache_lookups = metrics.cache_hits + metrics.cache_misses;
+
+    let cache_hit_rate = if cache_lookups > 0 {
+        (metrics.cache_hits as f64 / cache_lookups as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    let mut routes: Vec<serde_json::Value> = metrics
+        .route_requests
+        .iter()
+        .map(|(host, requests)| {
+            json!({
+                "host": host,
+                "requests": requests
+            })
+        })
+        .collect();
+
+    routes.sort_by(|a, b| {
+        a["host"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["host"].as_str().unwrap_or(""))
+    });
+
+    Json(json!({
+        "total_requests": metrics.total_requests,
+        "responses": {
+            "2xx": metrics.responses_2xx,
+            "4xx": metrics.responses_4xx,
+            "5xx": metrics.responses_5xx
+        },
+        "cache": {
+            "hits": metrics.cache_hits,
+            "misses": metrics.cache_misses,
+            "lookups": cache_lookups,
+            "hit_rate": cache_hit_rate
+        },
+        "routes": routes
+    }))
+}
+
+async fn record_proxy_request(state: &AppState, host: &str) {
+    let mut metrics = state.metrics.write().await;
+
+    metrics.total_requests += 1;
+
+    let key = if host.is_empty() { "(default)" } else { host };
+
+    *metrics.route_requests.entry(key.to_string()).or_insert(0) += 1;
+}
+
+async fn record_cache_result(state: &AppState, hit: bool) {
+    let mut metrics = state.metrics.write().await;
+
+    if hit {
+        metrics.cache_hits += 1;
+    } else {
+        metrics.cache_misses += 1;
+    }
+}
+
+async fn record_response_status(state: &AppState, status: StatusCode) {
+    let mut metrics = state.metrics.write().await;
+
+    match status.as_u16() {
+        200..=299 => metrics.responses_2xx += 1,
+        400..=499 => metrics.responses_4xx += 1,
+        500..=599 => metrics.responses_5xx += 1,
+        _ => {}
+    }
+}
+
 async fn cache_status(State(state): State<AppState>) -> Json<serde_json::Value> {
     let mut cache = state.cache.write().await;
     cache.retain(|_, entry| entry.expires_at > Instant::now());
@@ -1236,6 +1327,8 @@ async fn proxy_request(state: AppState, request: Request<Body>) -> Response {
         .trim_end_matches('.')
         .to_ascii_lowercase();
 
+    record_proxy_request(&state, &host).await;
+
     let selected_upstream = select_upstream(&state.config, &host);
 
     let path_and_query = request
@@ -1249,8 +1342,12 @@ async fn proxy_request(state: AppState, request: Request<Body>) -> Response {
 
     if method == axum::http::Method::GET && state.config.cache.enabled {
         if let Some(response) = get_cached_response(&state, &cache_key).await {
+            record_cache_result(&state, true).await;
+            record_response_status(&state, response.status()).await;
             return response;
         }
+
+        record_cache_result(&state, false).await;
     }
 
     let upstream_url = format!(
@@ -1264,6 +1361,8 @@ async fn proxy_request(state: AppState, request: Request<Body>) -> Response {
     let body = match to_bytes(body, 32 * 1024 * 1024).await {
         Ok(body) => body,
         Err(error) => {
+            record_response_status(&state, StatusCode::BAD_REQUEST).await;
+
             return text_response(
                 StatusCode::BAD_REQUEST,
                 format!("Unable to read request body: {error}"),
@@ -1284,6 +1383,8 @@ async fn proxy_request(state: AppState, request: Request<Body>) -> Response {
     let upstream_response = match upstream_request.body(body).send().await {
         Ok(response) => response,
         Err(error) => {
+            record_response_status(&state, StatusCode::BAD_GATEWAY).await;
+
             return text_response(
                 StatusCode::BAD_GATEWAY,
                 format!(
@@ -1306,12 +1407,16 @@ async fn proxy_request(state: AppState, request: Request<Body>) -> Response {
     let body = match upstream_response.bytes().await {
         Ok(bytes) => bytes.to_vec(),
         Err(error) => {
+            record_response_status(&state, StatusCode::BAD_GATEWAY).await;
+
             return text_response(
                 StatusCode::BAD_GATEWAY,
                 format!("Unable to read upstream response: {error}"),
             );
         }
     };
+
+    record_response_status(&state, status).await;
 
     if should_cache {
         let entry = CacheEntry {
