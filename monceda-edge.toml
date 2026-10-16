@@ -7,6 +7,9 @@ static_dir = "public"
 enabled = true
 upstream = "http://127.0.0.1:3000"
 health_path = "/"
+circuit_breaker_enabled = true
+circuit_breaker_failures = 2
+circuit_breaker_cooldown_seconds = 15
 
 [cache]
 enabled = true

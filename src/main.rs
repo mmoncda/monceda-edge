@@ -195,6 +195,15 @@ struct ProxyConfig {
 
     #[serde(default = "default_health_path")]
     health_path: String,
+
+    #[serde(default)]
+    circuit_breaker_enabled: bool,
+
+    #[serde(default = "default_circuit_breaker_failures")]
+    circuit_breaker_failures: u32,
+
+    #[serde(default = "default_circuit_breaker_cooldown")]
+    circuit_breaker_cooldown_seconds: u64,
 }
 
 impl Default for ProxyConfig {
@@ -203,6 +212,9 @@ impl Default for ProxyConfig {
             enabled: false,
             upstream: default_upstream(),
             health_path: default_health_path(),
+            circuit_breaker_enabled: false,
+            circuit_breaker_failures: default_circuit_breaker_failures(),
+            circuit_breaker_cooldown_seconds: default_circuit_breaker_cooldown(),
         }
     }
 }
@@ -446,6 +458,14 @@ fn default_health_path() -> String {
     "/".to_string()
 }
 
+fn default_circuit_breaker_failures() -> u32 {
+    2
+}
+
+fn default_circuit_breaker_cooldown() -> u64 {
+    15
+}
+
 fn default_cache_enabled() -> bool {
     true
 }
@@ -461,6 +481,7 @@ struct AppState {
     cache: Arc<RwLock<HashMap<String, CacheEntry>>>,
     metrics: Arc<RwLock<TrafficMetrics>>,
     rate_limits: Arc<RwLock<HashMap<IpAddr, RateLimitWindow>>>,
+    upstream_health: Arc<RwLock<HashMap<String, UpstreamCircuitState>>>,
 }
 
 #[derive(Default)]
@@ -476,7 +497,17 @@ struct TrafficMetrics {
     firewall_blocks: u64,
     rate_limit_blocks: u64,
     upstream_failovers: u64,
+    upstream_circuit_opens: u64,
+    upstream_circuit_skips: u64,
     route_requests: HashMap<String, u64>,
+}
+
+#[derive(Clone, Default)]
+struct UpstreamCircuitState {
+    consecutive_failures: u32,
+    open_until: Option<Instant>,
+    last_failure: Option<Instant>,
+    last_success: Option<Instant>,
 }
 
 #[derive(Clone)]
@@ -592,6 +623,7 @@ async fn serve(
         cache: Arc::new(RwLock::new(HashMap::new())),
         metrics: Arc::new(RwLock::new(TrafficMetrics::default())),
         rate_limits: Arc::new(RwLock::new(HashMap::new())),
+        upstream_health: Arc::new(RwLock::new(HashMap::new())),
     };
 
     let app = Router::new()
@@ -599,6 +631,7 @@ async fn serve(
         .route("/_edge/", get(edge_dashboard))
         .route("/_edge/health", get(edge_health))
         .route("/_edge/upstream", get(upstream_health))
+        .route("/_edge/upstreams/circuits", get(upstream_circuits_status))
         .route("/_edge/cache", get(cache_status))
         .route("/_edge/cache/purge", post(cache_purge))
         .route("/_edge/metrics", get(metrics_status))
@@ -698,6 +731,17 @@ async fn serve(
                 config.security.deny_ips.len()
             );
         }
+
+        println!(
+            "Circuit breaker: {} ({} failures, {}s cooldown)",
+            if config.proxy.circuit_breaker_enabled {
+                "enabled"
+            } else {
+                "disabled"
+            },
+            config.proxy.circuit_breaker_failures,
+            config.proxy.circuit_breaker_cooldown_seconds
+        );
 
         println!(
             "Cache: {} (TTL {}s)",
@@ -1243,6 +1287,135 @@ async fn acme_status(State(state): State<AppState>) -> Json<serde_json::Value> {
     }))
 }
 
+fn circuit_is_open(circuit: &UpstreamCircuitState, now: Instant) -> bool {
+    circuit.open_until.map(|until| until > now).unwrap_or(false)
+}
+
+fn failure_threshold_reached(failures: u32, threshold: u32) -> bool {
+    threshold > 0 && failures >= threshold
+}
+
+async fn upstream_available(state: &AppState, upstream: &str) -> bool {
+    if !state.config.proxy.circuit_breaker_enabled {
+        return true;
+    }
+
+    let health = state.upstream_health.read().await;
+
+    match health.get(upstream) {
+        Some(circuit) => !circuit_is_open(circuit, Instant::now()),
+        None => true,
+    }
+}
+
+async fn record_upstream_success(state: &AppState, upstream: &str) {
+    if !state.config.proxy.circuit_breaker_enabled {
+        return;
+    }
+
+    let now = Instant::now();
+    let mut health = state.upstream_health.write().await;
+
+    let circuit = health.entry(upstream.to_string()).or_default();
+
+    circuit.consecutive_failures = 0;
+    circuit.open_until = None;
+    circuit.last_success = Some(now);
+}
+
+async fn record_upstream_failure(state: &AppState, upstream: &str) {
+    if !state.config.proxy.circuit_breaker_enabled {
+        return;
+    }
+
+    let now = Instant::now();
+    let threshold = state.config.proxy.circuit_breaker_failures;
+
+    let cooldown = Duration::from_secs(state.config.proxy.circuit_breaker_cooldown_seconds);
+
+    let mut opened = false;
+
+    {
+        let mut health = state.upstream_health.write().await;
+
+        let circuit = health.entry(upstream.to_string()).or_default();
+
+        let was_open = circuit_is_open(circuit, now);
+
+        circuit.consecutive_failures = circuit.consecutive_failures.saturating_add(1);
+
+        circuit.last_failure = Some(now);
+
+        if failure_threshold_reached(circuit.consecutive_failures, threshold) {
+            circuit.open_until = Some(now + cooldown);
+
+            if !was_open {
+                opened = true;
+            }
+        }
+    }
+
+    if opened {
+        let mut metrics = state.metrics.write().await;
+        metrics.upstream_circuit_opens += 1;
+    }
+}
+
+async fn record_upstream_circuit_skip(state: &AppState) {
+    let mut metrics = state.metrics.write().await;
+    metrics.upstream_circuit_skips += 1;
+}
+
+async fn upstream_circuits_status(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let now = Instant::now();
+    let health = state.upstream_health.read().await;
+
+    let mut upstreams: Vec<serde_json::Value> = health
+        .iter()
+        .map(|(upstream, circuit)| {
+            let open = circuit_is_open(circuit, now);
+
+            let retry_after_seconds = circuit.open_until.map(|until| {
+                if until > now {
+                    until.duration_since(now).as_secs()
+                } else {
+                    0
+                }
+            });
+
+            json!({
+                "upstream": upstream,
+                "state": if open { "open" } else { "closed" },
+                "consecutive_failures":
+                    circuit.consecutive_failures,
+                "retry_after_seconds":
+                    retry_after_seconds
+            })
+        })
+        .collect();
+
+    upstreams.sort_by(|a, b| {
+        a["upstream"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["upstream"].as_str().unwrap_or(""))
+    });
+
+    Json(json!({
+        "enabled":
+            state.config.proxy.circuit_breaker_enabled,
+        "failure_threshold":
+            state.config.proxy.circuit_breaker_failures,
+        "cooldown_seconds":
+            state
+                .config
+                .proxy
+                .circuit_breaker_cooldown_seconds,
+        "tracked": upstreams.len(),
+        "upstreams": upstreams
+    }))
+}
+
 async fn routes_status(State(state): State<AppState>) -> Json<serde_json::Value> {
     Json(json!({
         "enabled": !state.config.routes.is_empty(),
@@ -1473,7 +1646,9 @@ async fn metrics_status(State(state): State<AppState>) -> Json<serde_json::Value
             "rate_limit_blocks": metrics.rate_limit_blocks
         },
         "upstream": {
-            "failovers": metrics.upstream_failovers
+            "failovers": metrics.upstream_failovers,
+            "circuit_opens": metrics.upstream_circuit_opens,
+            "circuit_skips": metrics.upstream_circuit_skips
         },
         "cache": {
             "hits": metrics.cache_hits,
@@ -1724,6 +1899,14 @@ async fn proxy_request(state: AppState, client_ip: IpAddr, request: Request<Body
     let mut last_error = String::new();
 
     for (index, candidate) in upstream_candidates.iter().enumerate() {
+        if !upstream_available(&state, candidate).await {
+            record_upstream_circuit_skip(&state).await;
+
+            last_error = format!("{} -> circuit breaker open", candidate);
+
+            continue;
+        }
+
         let upstream_url = format!("{}{}", candidate.trim_end_matches('/'), path_and_query);
 
         let mut upstream_request = state.client.request(method.clone(), &upstream_url);
@@ -1738,11 +1921,15 @@ async fn proxy_request(state: AppState, client_ip: IpAddr, request: Request<Body
 
         match upstream_request.body(body.clone()).send().await {
             Ok(response) => {
+                record_upstream_success(&state, candidate).await;
+
                 selected_upstream = candidate.clone();
+
                 upstream_response = Some(response);
 
                 if index > 0 {
                     let mut metrics = state.metrics.write().await;
+
                     metrics.upstream_failovers += 1;
                 }
 
@@ -1750,6 +1937,8 @@ async fn proxy_request(state: AppState, client_ip: IpAddr, request: Request<Body
             }
 
             Err(error) => {
+                record_upstream_failure(&state, candidate).await;
+
                 last_error = format!("{} -> {}", candidate, error);
             }
         }
@@ -2354,6 +2543,12 @@ fn show_config(config_path: &str, json: bool) -> Result<(), String> {
                 "enabled": config.proxy.enabled,
                 "upstream": config.proxy.upstream,
                 "health_path": config.proxy.health_path,
+                "circuit_breaker_enabled":
+                    config.proxy.circuit_breaker_enabled,
+                "circuit_breaker_failures":
+                    config.proxy.circuit_breaker_failures,
+                "circuit_breaker_cooldown_seconds":
+                    config.proxy.circuit_breaker_cooldown_seconds,
             },
             "cache": {
                 "enabled": config.cache.enabled,
@@ -3729,5 +3924,50 @@ fallback_upstreams = [
                 "http://127.0.0.1:3000".to_string(),
             ]
         );
+    }
+}
+
+#[cfg(test)]
+mod circuit_breaker_tests {
+    use super::{circuit_is_open, failure_threshold_reached, UpstreamCircuitState};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn circuit_is_closed_by_default() {
+        let circuit = UpstreamCircuitState::default();
+
+        assert!(!circuit_is_open(&circuit, Instant::now()));
+    }
+
+    #[test]
+    fn circuit_is_open_before_deadline() {
+        let now = Instant::now();
+
+        let circuit = UpstreamCircuitState {
+            open_until: Some(now + Duration::from_secs(10)),
+            ..Default::default()
+        };
+
+        assert!(circuit_is_open(&circuit, now));
+    }
+
+    #[test]
+    fn expired_circuit_is_not_open() {
+        let now = Instant::now();
+
+        let circuit = UpstreamCircuitState {
+            open_until: Some(now - Duration::from_secs(1)),
+            ..Default::default()
+        };
+
+        assert!(!circuit_is_open(&circuit, now));
+    }
+
+    #[test]
+    fn failure_threshold_requires_enough_failures() {
+        assert!(!failure_threshold_reached(1, 2));
+        assert!(failure_threshold_reached(2, 2));
+        assert!(failure_threshold_reached(3, 2));
+        assert!(!failure_threshold_reached(10, 0));
     }
 }
