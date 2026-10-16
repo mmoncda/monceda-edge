@@ -10,16 +10,18 @@ use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     net::{IpAddr, SocketAddr},
     path::{Component, Path, PathBuf},
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::RwLock;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 
 const VERSION: &str = "0.9.3";
+const ACCESS_LOG_CAPACITY: usize = 200;
+const ROUTE_LATENCY_CAPACITY: usize = 256;
 
 #[derive(Parser)]
 #[command(name = "monceda-edge", about = "Portable open-source edge platform")]
@@ -482,6 +484,7 @@ struct AppState {
     metrics: Arc<RwLock<TrafficMetrics>>,
     rate_limits: Arc<RwLock<HashMap<IpAddr, RateLimitWindow>>>,
     upstream_health: Arc<RwLock<HashMap<String, UpstreamCircuitState>>>,
+    access_log: Arc<RwLock<VecDeque<AccessLogEntry>>>,
 }
 
 #[derive(Default)]
@@ -500,6 +503,20 @@ struct TrafficMetrics {
     upstream_circuit_opens: u64,
     upstream_circuit_skips: u64,
     route_requests: HashMap<String, u64>,
+    route_latencies_ms: HashMap<String, VecDeque<u64>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct AccessLogEntry {
+    timestamp_ms: u64,
+    client_ip: String,
+    method: String,
+    host: String,
+    path: String,
+    status: u16,
+    latency_ms: u64,
+    upstream: Option<String>,
+    cache: String,
 }
 
 #[derive(Clone, Default)]
@@ -624,6 +641,7 @@ async fn serve(
         metrics: Arc::new(RwLock::new(TrafficMetrics::default())),
         rate_limits: Arc::new(RwLock::new(HashMap::new())),
         upstream_health: Arc::new(RwLock::new(HashMap::new())),
+        access_log: Arc::new(RwLock::new(VecDeque::new())),
     };
 
     let app = Router::new()
@@ -635,6 +653,8 @@ async fn serve(
         .route("/_edge/cache", get(cache_status))
         .route("/_edge/cache/purge", post(cache_purge))
         .route("/_edge/metrics", get(metrics_status))
+        .route("/_edge/access-log", get(access_log_status))
+        .route("/_edge/latency", get(latency_status))
         .route("/_edge/security", get(security_status))
         .route("/_edge/routes", get(routes_status))
         .route("/_edge/routes/check", get(routes_check_status))
@@ -1605,6 +1625,148 @@ async fn enforce_security(state: &AppState, client_ip: IpAddr) -> Option<Respons
     None
 }
 
+fn unix_time_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .min(u64::MAX as u128) as u64
+}
+
+fn percentile_ms(samples: &[u64], percentile: f64) -> u64 {
+    if samples.is_empty() {
+        return 0;
+    }
+
+    let mut values = samples.to_vec();
+    values.sort_unstable();
+
+    let percentile = percentile.clamp(0.0, 1.0);
+
+    let index = ((values.len() - 1) as f64 * percentile).round() as usize;
+
+    values[index]
+}
+
+async fn record_access_event(
+    state: &AppState,
+    client_ip: IpAddr,
+    method: &str,
+    host: &str,
+    path: &str,
+    status: StatusCode,
+    upstream: Option<&str>,
+    cache: &str,
+    started: Instant,
+) {
+    let latency_ms = started.elapsed().as_millis().min(u64::MAX as u128) as u64;
+
+    let route_key = if host.is_empty() {
+        "(default)".to_string()
+    } else {
+        host.to_string()
+    };
+
+    {
+        let mut metrics = state.metrics.write().await;
+
+        let samples = metrics
+            .route_latencies_ms
+            .entry(route_key)
+            .or_insert_with(VecDeque::new);
+
+        if samples.len() >= ROUTE_LATENCY_CAPACITY {
+            samples.pop_front();
+        }
+
+        samples.push_back(latency_ms);
+    }
+
+    let event = AccessLogEntry {
+        timestamp_ms: unix_time_ms(),
+        client_ip: client_ip.to_string(),
+        method: method.to_string(),
+        host: host.to_string(),
+        path: path.to_string(),
+        status: status.as_u16(),
+        latency_ms,
+        upstream: upstream.map(str::to_string),
+        cache: cache.to_string(),
+    };
+
+    {
+        let mut log = state.access_log.write().await;
+
+        if log.len() >= ACCESS_LOG_CAPACITY {
+            log.pop_front();
+        }
+
+        log.push_back(event.clone());
+    }
+
+    if let Ok(encoded) = serde_json::to_string(&event) {
+        println!("ACCESS {encoded}");
+    }
+}
+
+async fn access_log_status(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let log = state.access_log.read().await;
+
+    let entries: Vec<AccessLogEntry> = log.iter().rev().cloned().collect();
+
+    Json(json!({
+        "capacity": ACCESS_LOG_CAPACITY,
+        "count": entries.len(),
+        "entries": entries
+    }))
+}
+
+async fn latency_status(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let metrics = state.metrics.read().await;
+
+    let mut routes: Vec<serde_json::Value> = metrics
+        .route_latencies_ms
+        .iter()
+        .map(|(host, samples)| {
+            let values: Vec<u64> = samples.iter().copied().collect();
+
+            let count = values.len();
+
+            let total: u128 = values.iter().map(|value| *value as u128).sum();
+
+            let average_ms = if count > 0 {
+                (total as f64 / count as f64)
+            } else {
+                0.0
+            };
+
+            let max_ms = values.iter().copied().max().unwrap_or(0);
+
+            json!({
+                "host": host,
+                "samples": count,
+                "average_ms": average_ms,
+                "p50_ms": percentile_ms(&values, 0.50),
+                "p95_ms": percentile_ms(&values, 0.95),
+                "max_ms": max_ms
+            })
+        })
+        .collect();
+
+    routes.sort_by(|a, b| {
+        a["host"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["host"].as_str().unwrap_or(""))
+    });
+
+    Json(json!({
+        "sample_capacity_per_route":
+            ROUTE_LATENCY_CAPACITY,
+        "routes": routes
+    }))
+}
+
 async fn metrics_status(State(state): State<AppState>) -> Json<serde_json::Value> {
     let metrics = state.metrics.read().await;
 
@@ -1831,6 +1993,7 @@ async fn edge_fallback(
 }
 
 async fn proxy_request(state: AppState, client_ip: IpAddr, request: Request<Body>) -> Response {
+    let started = Instant::now();
     let method = request.method().clone();
 
     let host = request
@@ -1848,21 +2011,37 @@ async fn proxy_request(state: AppState, client_ip: IpAddr, request: Request<Body
         .trim_end_matches('.')
         .to_ascii_lowercase();
 
-    record_proxy_request(&state, &host).await;
-
-    if let Some(response) = enforce_security(&state, client_ip).await {
-        record_response_status(&state, response.status()).await;
-        return response;
-    }
-
-    let upstream_candidates = select_upstreams(&state.config, &host);
-
     let path_and_query = request
         .uri()
         .path_and_query()
         .map(|v| v.as_str())
         .unwrap_or("/")
         .to_string();
+
+    record_proxy_request(&state, &host).await;
+
+    if let Some(response) = enforce_security(&state, client_ip).await {
+        let status = response.status();
+
+        record_response_status(&state, status).await;
+
+        record_access_event(
+            &state,
+            client_ip,
+            method.as_str(),
+            &host,
+            &path_and_query,
+            status,
+            None,
+            "BYPASS",
+            started,
+        )
+        .await;
+
+        return response;
+    }
+
+    let upstream_candidates = select_upstreams(&state.config, &host);
 
     let cache_key = format!("{} {} {}", method, host, path_and_query);
 
@@ -1872,8 +2051,24 @@ async fn proxy_request(state: AppState, client_ip: IpAddr, request: Request<Body
 
     if cacheable_request {
         if let Some(response) = get_cached_response(&state, &cache_key).await {
+            let status = response.status();
+
             record_cache_result(&state, true).await;
-            record_response_status(&state, response.status()).await;
+            record_response_status(&state, status).await;
+
+            record_access_event(
+                &state,
+                client_ip,
+                method.as_str(),
+                &host,
+                &path_and_query,
+                status,
+                None,
+                "HIT",
+                started,
+            )
+            .await;
+
             return response;
         }
 
@@ -1885,12 +2080,24 @@ async fn proxy_request(state: AppState, client_ip: IpAddr, request: Request<Body
     let body = match to_bytes(body, 32 * 1024 * 1024).await {
         Ok(body) => body,
         Err(error) => {
-            record_response_status(&state, StatusCode::BAD_REQUEST).await;
+            let status = StatusCode::BAD_REQUEST;
 
-            return text_response(
-                StatusCode::BAD_REQUEST,
-                format!("Unable to read request body: {error}"),
-            );
+            record_response_status(&state, status).await;
+
+            record_access_event(
+                &state,
+                client_ip,
+                method.as_str(),
+                &host,
+                &path_and_query,
+                status,
+                None,
+                "BYPASS",
+                started,
+            )
+            .await;
+
+            return text_response(status, format!("Unable to read request body: {error}"));
         }
     };
 
@@ -1948,10 +2155,25 @@ async fn proxy_request(state: AppState, client_ip: IpAddr, request: Request<Body
         Some(response) => response,
 
         None => {
-            record_response_status(&state, StatusCode::BAD_GATEWAY).await;
+            let status = StatusCode::BAD_GATEWAY;
+
+            record_response_status(&state, status).await;
+
+            record_access_event(
+                &state,
+                client_ip,
+                method.as_str(),
+                &host,
+                &path_and_query,
+                status,
+                None,
+                "BYPASS",
+                started,
+            )
+            .await;
 
             return text_response(
-                StatusCode::BAD_GATEWAY,
+                status,
                 format!("Monceda Edge could not reach any upstream: {}", last_error),
             );
         }
@@ -1968,12 +2190,24 @@ async fn proxy_request(state: AppState, client_ip: IpAddr, request: Request<Body
     let body = match upstream_response.bytes().await {
         Ok(bytes) => bytes.to_vec(),
         Err(error) => {
-            record_response_status(&state, StatusCode::BAD_GATEWAY).await;
+            let status = StatusCode::BAD_GATEWAY;
 
-            return text_response(
-                StatusCode::BAD_GATEWAY,
-                format!("Unable to read upstream response: {error}"),
-            );
+            record_response_status(&state, status).await;
+
+            record_access_event(
+                &state,
+                client_ip,
+                method.as_str(),
+                &host,
+                &path_and_query,
+                status,
+                Some(&selected_upstream),
+                "MISS",
+                started,
+            )
+            .await;
+
+            return text_response(status, format!("Unable to read upstream response: {error}"));
         }
     };
 
@@ -1990,14 +2224,29 @@ async fn proxy_request(state: AppState, client_ip: IpAddr, request: Request<Body
         state.cache.write().await.insert(cache_key, entry);
     }
 
-    build_response(
+    let response = build_response(
         status,
         body,
         response_headers,
         false,
         &host,
         &selected_upstream,
+    );
+
+    record_access_event(
+        &state,
+        client_ip,
+        method.as_str(),
+        &host,
+        &path_and_query,
+        status,
+        Some(&selected_upstream),
+        if cacheable_request { "MISS" } else { "BYPASS" },
+        started,
     )
+    .await;
+
+    response
 }
 
 async fn get_cached_response(state: &AppState, key: &str) -> Option<Response> {
@@ -3969,5 +4218,28 @@ mod circuit_breaker_tests {
         assert!(failure_threshold_reached(2, 2));
         assert!(failure_threshold_reached(3, 2));
         assert!(!failure_threshold_reached(10, 0));
+    }
+}
+
+#[cfg(test)]
+mod latency_analytics_tests {
+    use super::percentile_ms;
+
+    #[test]
+    fn percentile_empty_is_zero() {
+        assert_eq!(percentile_ms(&[], 0.95), 0);
+    }
+
+    #[test]
+    fn percentile_returns_median() {
+        assert_eq!(percentile_ms(&[10, 20, 30, 40, 50], 0.50), 30);
+    }
+
+    #[test]
+    fn percentile_returns_high_tail() {
+        assert_eq!(
+            percentile_ms(&[10, 20, 30, 40, 50, 60, 70, 80, 90, 100], 0.95),
+            100
+        );
     }
 }
