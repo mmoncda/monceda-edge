@@ -1,9 +1,9 @@
 use axum::{
     body::{to_bytes, Body},
-    extract::{ConnectInfo, State},
+    extract::{ConnectInfo, Query, State},
     http::{header, HeaderName, HeaderValue, Request, StatusCode},
     response::{Html, Response},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use clap::{Parser, Subcommand};
@@ -465,6 +465,8 @@ struct TrafficMetrics {
     total_requests: u64,
     cache_hits: u64,
     cache_misses: u64,
+    cache_purges: u64,
+    cache_entries_purged: u64,
     responses_2xx: u64,
     responses_4xx: u64,
     responses_5xx: u64,
@@ -477,6 +479,18 @@ struct TrafficMetrics {
 struct RateLimitWindow {
     started_at: Instant,
     requests: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct CachePurgeQuery {
+    #[serde(default)]
+    all: bool,
+
+    #[serde(default)]
+    host: Option<String>,
+
+    #[serde(default)]
+    path: Option<String>,
 }
 
 #[derive(Clone)]
@@ -582,6 +596,7 @@ async fn serve(
         .route("/_edge/health", get(edge_health))
         .route("/_edge/upstream", get(upstream_health))
         .route("/_edge/cache", get(cache_status))
+        .route("/_edge/cache/purge", post(cache_purge))
         .route("/_edge/metrics", get(metrics_status))
         .route("/_edge/security", get(security_status))
         .route("/_edge/routes", get(routes_status))
@@ -1453,7 +1468,9 @@ async fn metrics_status(State(state): State<AppState>) -> Json<serde_json::Value
             "hits": metrics.cache_hits,
             "misses": metrics.cache_misses,
             "lookups": cache_lookups,
-            "hit_rate": cache_hit_rate
+            "hit_rate": cache_hit_rate,
+            "purges": metrics.cache_purges,
+            "entries_purged": metrics.cache_entries_purged
         },
         "routes": routes
     }))
@@ -1490,14 +1507,128 @@ async fn record_response_status(state: &AppState, status: StatusCode) {
     }
 }
 
+fn cache_key_matches_purge(key: &str, host: Option<&str>, path_prefix: Option<&str>) -> bool {
+    let mut parts = key.splitn(3, ' ');
+
+    let _method = parts.next().unwrap_or("");
+    let key_host = parts.next().unwrap_or("");
+    let key_path = parts.next().unwrap_or("");
+
+    if let Some(host) = host {
+        if !key_host.eq_ignore_ascii_case(host) {
+            return false;
+        }
+    }
+
+    if let Some(path_prefix) = path_prefix {
+        if !key_path.starts_with(path_prefix) {
+            return false;
+        }
+    }
+
+    true
+}
+
+async fn cache_purge(
+    State(state): State<AppState>,
+    Query(query): Query<CachePurgeQuery>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let normalized_host = query
+        .host
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.trim_end_matches('.').to_ascii_lowercase());
+
+    let normalized_path = query
+        .path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            if value.starts_with('/') {
+                value.to_string()
+            } else {
+                format!("/{value}")
+            }
+        });
+
+    if !query.all && normalized_host.is_none() && normalized_path.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "error":
+                    "Specify all=true, host, path, or a host/path combination"
+            })),
+        );
+    }
+
+    let mut cache = state.cache.write().await;
+
+    cache.retain(|_, entry| entry.expires_at > Instant::now());
+
+    let before = cache.len();
+
+    if query.all {
+        cache.clear();
+    } else {
+        cache.retain(|key, _| {
+            !cache_key_matches_purge(key, normalized_host.as_deref(), normalized_path.as_deref())
+        });
+    }
+
+    let after = cache.len();
+    let purged = before.saturating_sub(after);
+
+    drop(cache);
+
+    {
+        let mut metrics = state.metrics.write().await;
+        metrics.cache_purges += 1;
+        metrics.cache_entries_purged += purged as u64;
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "mode":
+                if query.all {
+                    "all"
+                } else if normalized_host.is_some()
+                    && normalized_path.is_some()
+                {
+                    "host_and_path"
+                } else if normalized_host.is_some() {
+                    "host"
+                } else {
+                    "path"
+                },
+            "host": normalized_host,
+            "path": normalized_path,
+            "purged": purged,
+            "entries_before": before,
+            "entries_after": after
+        })),
+    )
+}
+
 async fn cache_status(State(state): State<AppState>) -> Json<serde_json::Value> {
     let mut cache = state.cache.write().await;
     cache.retain(|_, entry| entry.expires_at > Instant::now());
 
+    let entries = cache.len();
+    drop(cache);
+
+    let metrics = state.metrics.read().await;
+
     Json(json!({
         "enabled": state.config.cache.enabled,
-        "entries": cache.len(),
-        "ttl_seconds": state.config.cache.ttl_seconds
+        "entries": entries,
+        "ttl_seconds": state.config.cache.ttl_seconds,
+        "purges": metrics.cache_purges,
+        "entries_purged": metrics.cache_entries_purged
     }))
 }
 
@@ -3414,6 +3545,56 @@ mod security_policy_tests {
             ip("10.0.0.1"),
             &["10.0.0.1".to_string()],
             &["10.0.0.1".to_string()],
+        ));
+    }
+}
+
+#[cfg(test)]
+mod cache_purge_tests {
+    use super::cache_key_matches_purge;
+
+    #[test]
+    fn purge_can_match_host() {
+        assert!(cache_key_matches_purge(
+            "GET dashboard.local /assets/app.js",
+            Some("dashboard.local"),
+            None,
+        ));
+
+        assert!(!cache_key_matches_purge(
+            "GET app.local /assets/app.js",
+            Some("dashboard.local"),
+            None,
+        ));
+    }
+
+    #[test]
+    fn purge_can_match_path_prefix() {
+        assert!(cache_key_matches_purge(
+            "GET dashboard.local /_next/static/app.js",
+            None,
+            Some("/_next/static/"),
+        ));
+
+        assert!(!cache_key_matches_purge(
+            "GET dashboard.local /images/logo.png",
+            None,
+            Some("/_next/static/"),
+        ));
+    }
+
+    #[test]
+    fn purge_can_match_host_and_path() {
+        assert!(cache_key_matches_purge(
+            "GET dashboard.local /assets/app.js",
+            Some("dashboard.local"),
+            Some("/assets/"),
+        ));
+
+        assert!(!cache_key_matches_purge(
+            "GET app.local /assets/app.js",
+            Some("dashboard.local"),
+            Some("/assets/"),
         ));
     }
 }
