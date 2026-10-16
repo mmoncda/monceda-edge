@@ -7,6 +7,9 @@ static_dir = "public"
 enabled = true
 upstream = "http://127.0.0.1:3000"
 health_path = "/"
+health_check_enabled = true
+health_check_interval_seconds = 10
+health_check_timeout_seconds = 3
 circuit_breaker_enabled = true
 circuit_breaker_failures = 2
 circuit_breaker_cooldown_seconds = 15
@@ -35,7 +38,7 @@ redirect_to_https = true
 [public_node]
 enabled = true
 primary_domain = "edge.moncedalabs.com"
-expected_ipv4 = ""
+expected_ipv4 = "136.158.56.129"
 
 [deployment]
 mode = "production"
@@ -45,7 +48,7 @@ require_public_domains = true
 [acme]
 enabled = true
 environment = "staging"
-email = ""
+email = "shancerecel101@gmail.com"
 cache_dir = "certs/acme"
 challenge = "http-01"
 

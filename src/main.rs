@@ -203,6 +203,15 @@ struct ProxyConfig {
     health_path: String,
 
     #[serde(default)]
+    health_check_enabled: bool,
+
+    #[serde(default = "default_health_check_interval")]
+    health_check_interval_seconds: u64,
+
+    #[serde(default = "default_health_check_timeout")]
+    health_check_timeout_seconds: u64,
+
+    #[serde(default)]
     circuit_breaker_enabled: bool,
 
     #[serde(default = "default_circuit_breaker_failures")]
@@ -218,6 +227,9 @@ impl Default for ProxyConfig {
             enabled: false,
             upstream: default_upstream(),
             health_path: default_health_path(),
+            health_check_enabled: false,
+            health_check_interval_seconds: default_health_check_interval(),
+            health_check_timeout_seconds: default_health_check_timeout(),
             circuit_breaker_enabled: false,
             circuit_breaker_failures: default_circuit_breaker_failures(),
             circuit_breaker_cooldown_seconds: default_circuit_breaker_cooldown(),
@@ -490,6 +502,14 @@ fn default_health_path() -> String {
     "/".to_string()
 }
 
+fn default_health_check_interval() -> u64 {
+    10
+}
+
+fn default_health_check_timeout() -> u64 {
+    3
+}
+
 fn default_circuit_breaker_failures() -> u32 {
     2
 }
@@ -674,6 +694,8 @@ async fn serve(
         access_log: Arc::new(RwLock::new(VecDeque::new())),
     };
 
+    start_upstream_health_monitor(state.clone());
+
     let app = Router::new()
         .route("/_edge", get(edge_dashboard))
         .route("/_edge/", get(edge_dashboard))
@@ -798,6 +820,17 @@ async fn serve(
         );
 
         println!(
+            "Proactive health checks: {} (every {}s, timeout {}s)",
+            if config.proxy.health_check_enabled {
+                "enabled"
+            } else {
+                "disabled"
+            },
+            config.proxy.health_check_interval_seconds,
+            config.proxy.health_check_timeout_seconds
+        );
+
+        println!(
             "Circuit breaker: {} ({} failures, {}s cooldown)",
             if config.proxy.circuit_breaker_enabled {
                 "enabled"
@@ -896,6 +929,74 @@ async fn edge_health(State(state): State<AppState>) -> Json<HealthResponse> {
             "static"
         },
     })
+}
+
+fn configured_upstreams(config: &Config) -> Vec<String> {
+    let mut upstreams = Vec::new();
+
+    let mut add = |value: &str| {
+        let value = value.trim();
+
+        if !value.is_empty() && !upstreams.iter().any(|existing| existing == value) {
+            upstreams.push(value.to_string());
+        }
+    };
+
+    add(&config.proxy.upstream);
+
+    for route in &config.routes {
+        add(&route.upstream);
+
+        for fallback in &route.fallback_upstreams {
+            add(fallback);
+        }
+    }
+
+    upstreams
+}
+
+async fn proactive_probe_upstream(state: &AppState, upstream: &str) {
+    let health_path = normalize_health_path(&state.config.proxy.health_path);
+
+    let url = format!("{}{}", upstream.trim_end_matches('/'), health_path);
+
+    let timeout_seconds = state.config.proxy.health_check_timeout_seconds.max(1);
+
+    let result = tokio::time::timeout(
+        Duration::from_secs(timeout_seconds),
+        state.client.get(&url).send(),
+    )
+    .await;
+
+    match result {
+        Ok(Ok(response)) if response.status().is_success() => {
+            record_upstream_success(state, upstream).await;
+        }
+
+        Ok(Ok(_)) | Ok(Err(_)) | Err(_) => {
+            record_upstream_failure(state, upstream).await;
+        }
+    }
+}
+
+fn start_upstream_health_monitor(state: AppState) {
+    if !state.config.proxy.enabled || !state.config.proxy.health_check_enabled {
+        return;
+    }
+
+    let interval_seconds = state.config.proxy.health_check_interval_seconds.max(1);
+
+    tokio::spawn(async move {
+        loop {
+            let upstreams = configured_upstreams(&state.config);
+
+            for upstream in upstreams {
+                proactive_probe_upstream(&state, &upstream).await;
+            }
+
+            tokio::time::sleep(Duration::from_secs(interval_seconds)).await;
+        }
+    });
 }
 
 async fn upstream_health(State(state): State<AppState>) -> Json<serde_json::Value> {
@@ -3035,6 +3136,12 @@ fn show_config(config_path: &str, json: bool) -> Result<(), String> {
                 "enabled": config.proxy.enabled,
                 "upstream": config.proxy.upstream,
                 "health_path": config.proxy.health_path,
+                "health_check_enabled":
+                    config.proxy.health_check_enabled,
+                "health_check_interval_seconds":
+                    config.proxy.health_check_interval_seconds,
+                "health_check_timeout_seconds":
+                    config.proxy.health_check_timeout_seconds,
                 "circuit_breaker_enabled":
                     config.proxy.circuit_breaker_enabled,
                 "circuit_breaker_failures":
@@ -3112,6 +3219,15 @@ fn show_config(config_path: &str, json: bool) -> Result<(), String> {
     println!("  enabled     {}", config.proxy.enabled);
     println!("  upstream    {}", config.proxy.upstream);
     println!("  health      {}", config.proxy.health_path);
+    println!("  proactive   {}", config.proxy.health_check_enabled);
+    println!(
+        "  interval    {}s",
+        config.proxy.health_check_interval_seconds
+    );
+    println!(
+        "  timeout     {}s",
+        config.proxy.health_check_timeout_seconds
+    );
     println!();
 
     println!("Control Plane");
@@ -3292,6 +3408,20 @@ fn validate_config(config_path: &str) -> Result<(), String> {
         pass("TLS configuration valid");
     } else if !config.tls.enabled {
         pass("TLS configuration valid");
+    }
+
+    if config.proxy.health_check_enabled && config.proxy.health_check_interval_seconds == 0 {
+        fail(
+            "Health-check interval cannot be 0 when proactive health checks are enabled",
+            &mut failures,
+        );
+    }
+
+    if config.proxy.health_check_enabled && config.proxy.health_check_timeout_seconds == 0 {
+        fail(
+            "Health-check timeout cannot be 0 when proactive health checks are enabled",
+            &mut failures,
+        );
     }
 
     if config.proxy.enabled {
