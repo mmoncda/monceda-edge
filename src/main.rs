@@ -1735,7 +1735,7 @@ async fn latency_status(State(state): State<AppState>) -> Json<serde_json::Value
             let total: u128 = values.iter().map(|value| *value as u128).sum();
 
             let average_ms = if count > 0 {
-                (total as f64 / count as f64)
+                total as f64 / count as f64
             } else {
                 0.0
             };
