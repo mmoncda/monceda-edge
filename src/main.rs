@@ -1340,7 +1340,11 @@ async fn proxy_request(state: AppState, request: Request<Body>) -> Response {
 
     let cache_key = format!("{} {} {}", method, host, path_and_query);
 
-    if method == axum::http::Method::GET && state.config.cache.enabled {
+    let cacheable_request = method == axum::http::Method::GET
+        && state.config.cache.enabled
+        && is_cacheable_asset_path(&path_and_query);
+
+    if cacheable_request {
         if let Some(response) = get_cached_response(&state, &cache_key).await {
             record_cache_result(&state, true).await;
             record_response_status(&state, response.status()).await;
@@ -1397,8 +1401,7 @@ async fn proxy_request(state: AppState, request: Request<Body>) -> Response {
 
     let status = upstream_response.status();
 
-    let should_cache = method == axum::http::Method::GET
-        && state.config.cache.enabled
+    let should_cache = cacheable_request
         && status.is_success()
         && !response_disables_cache(upstream_response.headers());
 
@@ -1604,6 +1607,38 @@ fn text_response(status: StatusCode, message: String) -> Response {
         .header("x-monceda-edge", VERSION)
         .body(Body::from(message))
         .unwrap_or_else(|_| Response::new(Body::empty()))
+}
+
+fn is_cacheable_asset_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split('?')
+        .next()
+        .unwrap_or(path_and_query)
+        .to_ascii_lowercase();
+
+    if path.starts_with("/api/")
+        || path == "/api"
+        || path.starts_with("/_edge/")
+        || path == "/_edge"
+    {
+        return false;
+    }
+
+    if path.starts_with("/_next/static/")
+        || path.starts_with("/assets/")
+        || path.starts_with("/static/")
+    {
+        return true;
+    }
+
+    const STATIC_EXTENSIONS: &[&str] = &[
+        ".css", ".js", ".mjs", ".map", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".svg",
+        ".ico", ".woff", ".woff2", ".ttf", ".otf",
+    ];
+
+    STATIC_EXTENSIONS
+        .iter()
+        .any(|extension| path.ends_with(extension))
 }
 
 fn response_disables_cache(headers: &reqwest::header::HeaderMap) -> bool {
@@ -3101,5 +3136,32 @@ async fn status(config_path: &str, json_output: bool) -> Result<(), String> {
 
             Err(format!("Monceda Edge is not reachable at {url}"))
         }
+    }
+}
+
+#[cfg(test)]
+mod cache_policy_tests {
+    use super::is_cacheable_asset_path;
+
+    #[test]
+    fn static_assets_are_cacheable() {
+        assert!(is_cacheable_asset_path("/_next/static/chunks/app-123.js"));
+        assert!(is_cacheable_asset_path("/_next/static/media/font.woff2"));
+        assert!(is_cacheable_asset_path("/assets/logo.png"));
+        assert!(is_cacheable_asset_path("/styles/site.css?v=2"));
+    }
+
+    #[test]
+    fn dynamic_paths_are_not_cacheable() {
+        assert!(!is_cacheable_asset_path("/"));
+        assert!(!is_cacheable_asset_path("/dashboard"));
+        assert!(!is_cacheable_asset_path("/api/session"));
+        assert!(!is_cacheable_asset_path("/_edge/metrics"));
+    }
+
+    #[test]
+    fn query_strings_do_not_break_asset_detection() {
+        assert!(is_cacheable_asset_path("/image.webp?width=640&quality=80"));
+        assert!(!is_cacheable_asset_path("/api/image?format=webp"));
     }
 }
