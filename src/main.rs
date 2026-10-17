@@ -202,6 +202,9 @@ struct ProxyConfig {
     #[serde(default = "default_health_path")]
     health_path: String,
 
+    #[serde(default = "default_load_balancing")]
+    load_balancing: String,
+
     #[serde(default)]
     health_check_enabled: bool,
 
@@ -227,6 +230,7 @@ impl Default for ProxyConfig {
             enabled: false,
             upstream: default_upstream(),
             health_path: default_health_path(),
+            load_balancing: default_load_balancing(),
             health_check_enabled: false,
             health_check_interval_seconds: default_health_check_interval(),
             health_check_timeout_seconds: default_health_check_timeout(),
@@ -502,6 +506,10 @@ fn default_health_path() -> String {
     "/".to_string()
 }
 
+fn default_load_balancing() -> String {
+    "failover".to_string()
+}
+
 fn default_health_check_interval() -> u64 {
     10
 }
@@ -534,6 +542,7 @@ struct AppState {
     metrics: Arc<RwLock<TrafficMetrics>>,
     rate_limits: Arc<RwLock<HashMap<IpAddr, RateLimitWindow>>>,
     upstream_health: Arc<RwLock<HashMap<String, UpstreamCircuitState>>>,
+    round_robin_cursors: Arc<RwLock<HashMap<String, usize>>>,
     access_log: Arc<RwLock<VecDeque<AccessLogEntry>>>,
 }
 
@@ -691,6 +700,7 @@ async fn serve(
         metrics: Arc::new(RwLock::new(TrafficMetrics::default())),
         rate_limits: Arc::new(RwLock::new(HashMap::new())),
         upstream_health: Arc::new(RwLock::new(HashMap::new())),
+        round_robin_cursors: Arc::new(RwLock::new(HashMap::new())),
         access_log: Arc::new(RwLock::new(VecDeque::new())),
     };
 
@@ -818,6 +828,8 @@ async fn serve(
             config.control_plane.allow_loopback_without_token,
             config.control_plane.token_env
         );
+
+        println!("Load balancing: {}", config.proxy.load_balancing);
 
         println!(
             "Proactive health checks: {} (every {}s, timeout {}s)",
@@ -2385,7 +2397,7 @@ async fn proxy_request(state: AppState, client_ip: IpAddr, request: Request<Body
         return response;
     }
 
-    let upstream_candidates = select_upstreams(&state.config, &host);
+    let upstream_candidates = request_upstreams(&state, &host).await;
 
     let cache_key = format!("{} {} {}", method, host, path_and_query);
 
@@ -3103,6 +3115,46 @@ fn select_upstream(config: &Config, host: &str) -> String {
         .unwrap_or_else(|| config.proxy.upstream.clone())
 }
 
+fn rotate_upstreams(mut upstreams: Vec<String>, start: usize) -> Vec<String> {
+    if upstreams.len() <= 1 {
+        return upstreams;
+    }
+
+    let start = start % upstreams.len();
+    upstreams.rotate_left(start);
+    upstreams
+}
+
+async fn request_upstreams(state: &AppState, host: &str) -> Vec<String> {
+    let upstreams = select_upstreams(&state.config, host);
+
+    if upstreams.len() <= 1
+        || !state
+            .config
+            .proxy
+            .load_balancing
+            .eq_ignore_ascii_case("round_robin")
+    {
+        return upstreams;
+    }
+
+    let key = if host.trim().is_empty() {
+        "(default)".to_string()
+    } else {
+        host.trim().trim_end_matches('.').to_ascii_lowercase()
+    };
+
+    let start = {
+        let mut cursors = state.round_robin_cursors.write().await;
+        let cursor = cursors.entry(key).or_insert(0);
+        let start = *cursor;
+        *cursor = cursor.wrapping_add(1);
+        start
+    };
+
+    rotate_upstreams(upstreams, start)
+}
+
 fn normalize_health_path(path: &str) -> String {
     if path.starts_with('/') {
         path.to_string()
@@ -3136,6 +3188,7 @@ fn show_config(config_path: &str, json: bool) -> Result<(), String> {
                 "enabled": config.proxy.enabled,
                 "upstream": config.proxy.upstream,
                 "health_path": config.proxy.health_path,
+                "load_balancing": config.proxy.load_balancing,
                 "health_check_enabled":
                     config.proxy.health_check_enabled,
                 "health_check_interval_seconds":
@@ -3219,6 +3272,7 @@ fn show_config(config_path: &str, json: bool) -> Result<(), String> {
     println!("  enabled     {}", config.proxy.enabled);
     println!("  upstream    {}", config.proxy.upstream);
     println!("  health      {}", config.proxy.health_path);
+    println!("  balancing   {}", config.proxy.load_balancing);
     println!("  proactive   {}", config.proxy.health_check_enabled);
     println!(
         "  interval    {}s",
@@ -3408,6 +3462,16 @@ fn validate_config(config_path: &str) -> Result<(), String> {
         pass("TLS configuration valid");
     } else if !config.tls.enabled {
         pass("TLS configuration valid");
+    }
+
+    if config.proxy.load_balancing != "failover" && config.proxy.load_balancing != "round_robin" {
+        fail(
+            &format!(
+                "Unknown load balancing policy: {}",
+                config.proxy.load_balancing
+            ),
+            &mut failures,
+        );
     }
 
     if config.proxy.health_check_enabled && config.proxy.health_check_interval_seconds == 0 {
@@ -4738,5 +4802,35 @@ mod public_ingress_readiness_tests {
             "MONCEDA_EDGE_CONTROL_TOKEN",
             true,
         ));
+    }
+}
+
+#[cfg(test)]
+mod round_robin_tests {
+    use super::*;
+
+    #[test]
+    fn round_robin_rotation_moves_starting_upstream() {
+        let upstreams = vec![
+            "http://127.0.0.1:3000".to_string(),
+            "http://127.0.0.1:3001".to_string(),
+            "http://127.0.0.1:3002".to_string(),
+        ];
+
+        let rotated = rotate_upstreams(upstreams, 1);
+
+        assert_eq!(rotated[0], "http://127.0.0.1:3001");
+        assert_eq!(rotated[1], "http://127.0.0.1:3002");
+        assert_eq!(rotated[2], "http://127.0.0.1:3000");
+    }
+
+    #[test]
+    fn round_robin_rotation_wraps_cursor() {
+        let upstreams = vec!["a".to_string(), "b".to_string()];
+
+        assert_eq!(
+            rotate_upstreams(upstreams, 5),
+            vec!["b".to_string(), "a".to_string()]
+        );
     }
 }

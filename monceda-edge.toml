@@ -7,6 +7,7 @@ static_dir = "public"
 enabled = true
 upstream = "http://127.0.0.1:3000"
 health_path = "/"
+load_balancing = "round_robin"
 health_check_enabled = true
 health_check_interval_seconds = 10
 health_check_timeout_seconds = 3
